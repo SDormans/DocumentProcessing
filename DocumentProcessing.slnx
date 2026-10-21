@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="DocumentProcessing.Api/DocumentProcessing.Api.csproj" />
+  <Project Path="DocumentProcessing.Application/DocumentProcessing.Application.csproj" />
+  <Project Path="DocumentProcessing.Domain/DocumentProcessing.Domain.csproj" />
+  <Project Path="DocumentProcessing.Infrastructure/DocumentProcessing.Infrastructure.csproj" />
+  <Project Path="DocumentProcessing.IntegrationTests/DocumentProcessing.IntegrationTests.csproj" />
+  <Project Path="DocumentProcessing.UnitTests/DocumentProcessing.UnitTests.csproj" />
+</Solution>
