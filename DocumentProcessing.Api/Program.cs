@@ -1,4 +1,6 @@
 using DocumentProcessing.Application.Services;
+using DocumentProcessing.Application.Services.Invoice;
+using DocumentProcessing.Infrastructure.Ai;
 using DocumentProcessing.Application.Services.TextExtraction;
 using DocumentProcessing.Domain.Interfaces;
 using DocumentProcessing.Infrastructure.Data;
@@ -42,6 +44,10 @@ builder.Services.AddScoped<IDocumentTextExtractor, PdfPigTextExtractor>();
 builder.Services.AddScoped<ITextExtractionDetector, TextExtractionDetector>();
 builder.Services.AddScoped<IOcrProvider, TesseractOcrProvider>();
 builder.Services.AddScoped<IDocumentTextExtractionService, DocumentTextExtractionService>();
+
+// AI providers
+builder.Services.AddScoped<IAiProvider, FakeAiProvider>(); // Use RealAiProvider when configured
+builder.Services.AddScoped<IInvoiceExtractor, InvoiceExtractor>();
 
 // DocumentService options from configuration
 builder.Services.Configure<DocumentServiceOptions>(builder.Configuration.GetSection("DocumentService"));
