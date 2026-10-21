@@ -64,6 +64,59 @@ namespace DocumentProcessing.Infrastructure.Migrations
 
                     b.ToTable("Documents", (string)null);
                 });
+
+            modelBuilder.Entity("DocumentProcessing.Domain.Entities.DocumentTextExtraction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ExtractedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExtractionMethod")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("ExtractionVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("FullText")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("HasAnyText")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsPartial")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("PageCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("QualityJson")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int>("TotalCharacterCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("WarningsJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("DocumentId", "ExtractionVersion")
+                        .IsUnique();
+
+                    b.ToTable("DocumentTextExtractions", (string)null);
+                });
 #pragma warning restore 612, 618
         }
     }

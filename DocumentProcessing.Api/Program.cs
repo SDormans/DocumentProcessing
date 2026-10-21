@@ -1,7 +1,10 @@
 using DocumentProcessing.Application.Services;
+using DocumentProcessing.Application.Services.TextExtraction;
 using DocumentProcessing.Domain.Interfaces;
 using DocumentProcessing.Infrastructure.Data;
+using DocumentProcessing.Infrastructure.Ocr;
 using DocumentProcessing.Infrastructure.Storage;
+using DocumentProcessing.Infrastructure.TextExtraction;
 using DocumentProcessing.Api.Middleware;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -34,8 +37,15 @@ builder.Services.AddScoped<IDocumentRepository>(
 builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
 
+// Text extraction services
+builder.Services.AddScoped<IDocumentTextExtractor, PdfPigTextExtractor>();
+builder.Services.AddScoped<ITextExtractionDetector, TextExtractionDetector>();
+builder.Services.AddScoped<IOcrProvider, TesseractOcrProvider>();
+builder.Services.AddScoped<IDocumentTextExtractionService, DocumentTextExtractionService>();
+
 // DocumentService options from configuration
 builder.Services.Configure<DocumentServiceOptions>(builder.Configuration.GetSection("DocumentService"));
+builder.Services.Configure<TextExtractionOptions>(builder.Configuration.GetSection("TextExtraction"));
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
