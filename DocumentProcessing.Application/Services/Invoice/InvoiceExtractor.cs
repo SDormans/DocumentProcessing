@@ -4,10 +4,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DocumentProcessing.Application.Services.Invoice;
 
-/// <summary>
-/// Service voor factuurgegevensextractie.
-/// Combineert native PDF-tekstextractie met AI-augmented extractie als nodig.
-/// </summary>
 public class InvoiceExtractor : IInvoiceExtractor
 {
     private readonly IDocumentRepository _documentRepository;
@@ -16,6 +12,7 @@ public class InvoiceExtractor : IInvoiceExtractor
     private readonly ITextExtractionDetector _textDetector;
     private readonly IAiProvider _aiProvider;
     private readonly ILogger<InvoiceExtractor> _logger;
+    private readonly ValidationService _validationService;
 
     public InvoiceExtractor(
         IDocumentRepository documentRepository,
@@ -23,7 +20,8 @@ public class InvoiceExtractor : IInvoiceExtractor
         IDocumentTextExtractor textExtractor,
         ITextExtractionDetector textDetector,
         IAiProvider aiProvider,
-        ILogger<InvoiceExtractor> logger)
+        ILogger<InvoiceExtractor> logger,
+        ValidationService validationService)
     {
         _documentRepository = documentRepository;
         _fileStorage = fileStorage;
@@ -31,6 +29,7 @@ public class InvoiceExtractor : IInvoiceExtractor
         _textDetector = textDetector;
         _aiProvider = aiProvider;
         _logger = logger;
+        _validationService = validationService;
     }
 
     public async Task<InvoiceExtractionResult> ExtractAsync(Guid documentId, CancellationToken cancellationToken = default)
