@@ -5,4 +5,5 @@
   <Project Path="DocumentProcessing.Infrastructure/DocumentProcessing.Infrastructure.csproj" />
   <Project Path="DocumentProcessing.IntegrationTests/DocumentProcessing.IntegrationTests.csproj" />
   <Project Path="DocumentProcessing.UnitTests/DocumentProcessing.UnitTests.csproj" />
+  <Project Path="DocumentProcessing.Worker/DocumentProcessing.Worker.csproj" />
 </Solution>

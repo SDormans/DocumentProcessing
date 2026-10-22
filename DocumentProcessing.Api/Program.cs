@@ -1,4 +1,4 @@
-using DocumentProcessing.Application.Services;
+﻿using DocumentProcessing.Application.Services;
 using DocumentProcessing.Application.Services.Invoice;
 using DocumentProcessing.Infrastructure.Ai;
 using DocumentProcessing.Application.Services.TextExtraction;
@@ -17,6 +17,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using DocumentProcessing.Infrastructure.Queue;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,6 +40,7 @@ builder.Services.AddDbContext<AppDbContext>((sp, options) =>
 
 builder.Services.AddScoped<IDocumentRepository>(
     sp => sp.GetRequiredService<AppDbContext>());
+builder.Services.AddScoped<IQueueCommandRepository, QueueCommandRepository>();
 builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
 builder.Services.AddScoped<ValidationService>();
