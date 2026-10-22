@@ -102,6 +102,62 @@ public class DocumentValidationTests
     }
 
     [Fact]
+    public async Task UploadDocumentAsync_PathTraversalFileName_StoresOnlyFileName()
+    {
+        var stream = new MemoryStream("%PDF-1.7\nsynthetic"u8.ToArray());
+        _mockFileStorage
+            .Setup(s => s.StoreAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Stream _, string key, CancellationToken _) => key);
+
+        await _service.UploadDocumentAsync(
+            stream,
+            @"..\..\invoice.pdf",
+            "application/pdf",
+            CancellationToken.None);
+
+        _mockRepository.Verify(r => r.AddAsync(
+            It.Is<Document>(document => document.OriginalFileName == "invoice.pdf" &&
+                document.StorageKey.EndsWith(".pdf")),
+            It.IsAny<CancellationToken>()), Times.Once);
+        _mockFileStorage.Verify(s => s.StoreAsync(
+            It.IsAny<Stream>(),
+            It.Is<string>(key => !key.Contains("..") && key.EndsWith(".pdf")),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task UploadDocumentAsync_ConflictingContentType_ThrowsValidationException()
+    {
+        var stream = new MemoryStream("%PDF-1.7\nsynthetic"u8.ToArray());
+
+        var act = () => _service.UploadDocumentAsync(
+            stream,
+            "invoice.pdf",
+            "text/plain",
+            CancellationToken.None);
+
+        var exception = await act.Should().ThrowAsync<ValidationException>();
+        exception.And.Errors.Should().Contain("Content type must be application/pdf or application/octet-stream.");
+    }
+
+    [Fact]
+    public async Task UploadDocumentAsync_GenericContentTypeWithValidPdfSignature_Succeeds()
+    {
+        var stream = new MemoryStream("%PDF-1.7\nsynthetic"u8.ToArray());
+        _mockFileStorage
+            .Setup(s => s.StoreAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("synthetic.pdf");
+
+        var result = await _service.UploadDocumentAsync(
+            stream,
+            "invoice.pdf",
+            "application/octet-stream",
+            CancellationToken.None);
+
+        result.Status.Should().Be("Uploaded");
+    }
+
+    [Fact]
     public async Task UploadDocumentAsync_NullFileName_ThrowsValidationException()
     {
         // Arrange

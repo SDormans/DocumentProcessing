@@ -6,8 +6,6 @@ public class DocumentDto
     public string OriginalFileName { get; set; } = string.Empty;
     public string ContentType { get; set; } = string.Empty;
     public long FileSize { get; set; }
-    public string ContentHash { get; set; } = string.Empty;
-    public string StorageKey { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
 }

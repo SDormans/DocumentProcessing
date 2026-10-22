@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            DocumentProcessing.Web/package-lock.json
+
+      - name: Restore .NET
+        run: dotnet restore DocumentProcessing.slnx
+
+      - name: Build .NET
+        run: dotnet build DocumentProcessing.slnx --configuration Release --no-restore
+
+      - name: Test .NET
+        run: dotnet test DocumentProcessing.slnx --configuration Release --no-build
+
+      - name: Install evaluation tooling
+        run: npm ci
+
+      - name: Verify synthetic dataset generation
+        run: |
+          npm run dataset:generate
+          git diff --exit-code -- evaluation-data/invoices.jsonl
+
+      - name: Test evaluation tooling
+        run: npm test
+
+      - name: Run baseline evaluation report
+        run: npm run evaluate
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix DocumentProcessing.Web
+
+      - name: Build frontend
+        run: npm --prefix DocumentProcessing.Web run build
+
+      - name: Validate Docker Compose
+        run: docker compose --env-file .env.example config --quiet
+
+      - name: Build container images
+        run: docker compose --env-file .env.example build

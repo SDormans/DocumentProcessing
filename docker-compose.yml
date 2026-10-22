@@ -1,19 +1,68 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
     environment:
-      POSTGRES_DB: DocumentProcessing
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ChangeMe
+      POSTGRES_DB: ${POSTGRES_DB:-documentprocessing}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Copy .env.example to .env and set POSTGRES_PASSWORD}
+      APP_DB_USER: ${APP_DB_USER:-documentprocessing_app}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_demo_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
       timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: DocumentProcessing.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-documentprocessing};Username=${APP_DB_USER:-documentprocessing_app};Password=${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
+      FileStorage__BasePath: /app/data/storage
+      DocumentService__MaxFileSizeBytes: ${MAX_FILE_SIZE_BYTES:-10485760}
+      Authentication__Bootstrap__Username: ${DEMO_ADMIN_USERNAME:?Set DEMO_ADMIN_USERNAME in .env}
+      Authentication__Bootstrap__Password: ${DEMO_ADMIN_PASSWORD:?Set DEMO_ADMIN_PASSWORD in .env}
+      Authentication__Bootstrap__Email: ${DEMO_ADMIN_EMAIL:-demo-admin@example.invalid}
+      Authentication__Bootstrap__Role: Admin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${API_PORT:-8080}:8080"
+    volumes:
+      - document_storage_demo:/app/data/storage
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health/ready"]
+      interval: 10s
+      timeout: 5s
       retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: DocumentProcessing.Web
+      dockerfile: Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8081}:8080"
+    restart: unless-stopped
 
 volumes:
-  postgres_data:
+  postgres_demo_data:
+    name: documentprocessing_demo_postgres_data
+  document_storage_demo:
+    name: documentprocessing_demo_storage

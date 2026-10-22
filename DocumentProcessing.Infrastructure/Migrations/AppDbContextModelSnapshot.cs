@@ -122,8 +122,6 @@ namespace DocumentProcessing.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DocumentId");
-
                     b.HasIndex("DocumentId", "ExtractionVersion")
                         .IsUnique();
 
@@ -283,6 +281,40 @@ namespace DocumentProcessing.Infrastructure.Migrations
                     b.ToTable("DocumentTextExtractions", (string)null);
                 });
 
+            modelBuilder.Entity("DocumentProcessing.Domain.Entities.QueueCommand", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("LastErrorCategory")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId");
+
+                    b.ToTable("QueueCommands", (string)null);
+                });
+
             modelBuilder.Entity("DocumentProcessing.Domain.Entities.ReviewAuditEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -342,6 +374,17 @@ namespace DocumentProcessing.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("DocumentProcessing.Domain.Entities.DocumentReview", b =>
+                {
+                    b.HasOne("DocumentProcessing.Domain.Entities.Document", "Document")
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+                });
+
+            modelBuilder.Entity("DocumentProcessing.Domain.Entities.QueueCommand", b =>
                 {
                     b.HasOne("DocumentProcessing.Domain.Entities.Document", "Document")
                         .WithMany()

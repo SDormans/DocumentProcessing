@@ -1,16 +1,13 @@
-// @ts-nocheck
-import React from 'react';
+import React, { useState } from 'react';
 
 interface ApproveRejectButtonsProps {
-  documentId: string;
-  onApprove: (request?: any) => Promise<void>;
-  onReject: (request: any) => Promise<void>;
+  onApprove: () => Promise<void>;
+  onReject: (reason: string) => Promise<void>;
   canApprove: boolean;
   canReject: boolean;
 }
 
 export const ApproveRejectButtons: React.FC<ApproveRejectButtonsProps> = ({ 
-  documentId, 
   onApprove, 
   onReject, 
   canApprove, 
@@ -18,6 +15,7 @@ export const ApproveRejectButtons: React.FC<ApproveRejectButtonsProps> = ({
 }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   const handleApprove = async () => {
     if (!canApprove) return;
@@ -27,7 +25,7 @@ export const ApproveRejectButtons: React.FC<ApproveRejectButtonsProps> = ({
     try {
       await onApprove();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Onbekende fout');
+      setError(err instanceof Error ? err.message : 'Unknown error.');
     } finally {
       setSubmitting(false);
     }
@@ -35,13 +33,17 @@ export const ApproveRejectButtons: React.FC<ApproveRejectButtonsProps> = ({
 
   const handleReject = async () => {
     if (!canReject) return;
+    if (!rejectionReason.trim()) {
+      setError('Enter a reason before rejecting this document.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
     
     try {
-      await onReject({ reason: 'Gebruiker weigert goedkeuring' });
+      await onReject(rejectionReason.trim());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Onbekende fout');
+      setError(err instanceof Error ? err.message : 'Unknown error.');
     } finally {
       setSubmitting(false);
     }
@@ -55,19 +57,20 @@ export const ApproveRejectButtons: React.FC<ApproveRejectButtonsProps> = ({
           disabled={submitting}
           className="btn-approve"
         >
-          {submitting ? 'Bezig...' : 'Goedgekeurd'}
+          {submitting ? 'Saving...' : 'Approve'}
         </button>
       )}
       {canReject && (
-        <button 
-          onClick={handleReject} 
-          disabled={submitting || !canReject}
-          className="btn-reject"
-        >
-          {submitting ? 'Bezig...' : 'Afgewezen'}
-        </button>
+        <>
+          <label htmlFor="rejection-reason">Rejection reason</label>
+          <input id="rejection-reason" required value={rejectionReason}
+            onChange={event => setRejectionReason(event.target.value)} />
+          <button onClick={handleReject} disabled={submitting} className="btn-reject">
+            {submitting ? 'Saving...' : 'Reject'}
+          </button>
+        </>
       )}
-      {error && <p className="error">Fout: {error}</p>}
+      {error && <p className="error">Error: {error}</p>}
     </div>
   );
 };

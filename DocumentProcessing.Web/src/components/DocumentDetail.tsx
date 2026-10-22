@@ -1,69 +1,84 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DocumentReviewForm } from './DocumentReviewForm';
 import { ApproveRejectButtons } from './ApproveRejectButtons';
 import { useDocumentReview } from '../hooks/useDocumentReview';
 
-export const DocumentDetail: React.FC<{ documentId: string }> = ({ documentId }) => {
+interface DocumentSummary {
+  originalFileName: string;
+  status: string;
+  createdAtUtc: string;
+}
+
+export const DocumentDetail: React.FC = () => {
+  const { documentId } = useParams<{ documentId: string }>();
   const navigate = useNavigate();
-  const [document, setDocument] = useState<any>(null);
+  const [document, setDocument] = useState<DocumentSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { reviewState, submitCorrections, approve, reject, isLoading } = useDocumentReview(documentId);
+  const { reviewState, submitCorrections, approve, reject, isLoading, reviewError } =
+    useDocumentReview(documentId ?? '');
 
   useEffect(() => {
+    if (!documentId) {
+      setError('Document ID is missing.');
+      setLoading(false);
+      return;
+    }
     fetch(`/api/documents/${documentId}`)
       .then(async (response) => {
-        if (!response.ok) throw new Error('Failed to fetch document');
-        const data = await response.json();
+        if (!response.ok) throw new Error('Could not load the document.');
+        const data = await response.json() as DocumentSummary;
         setDocument(data);
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        setError(err instanceof Error ? err.message : 'Could not load the document.');
       })
       .finally(() => setLoading(false));
   }, [documentId]);
 
-  if (loading) return <p>Laden document detail...</p>;
-  if (error) return <p className="error">Fout: {error}</p>;
+  if (loading) return <p>Loading document details...</p>;
+  if (error) return <p className="error">Error: {error}</p>;
   if (!document) return null;
 
   return (
     <div className="document-detail">
       <h2>{document.originalFileName}</h2>
       <p>Status: {document.status}</p>
-      <p>Gemaakt: {new Date(document.createdAtUtc).toLocaleDateString()}</p>
+      <p>Created: {new Date(document.createdAtUtc).toLocaleDateString()}</p>
       
       <hr />
-      <h3>Review-Interface</h3>
+      <h3>Review</h3>
       
       {reviewState ? (
         <div>
-          <p>Veld: {reviewState.fieldName ?? 'Onbekend'} - Huidige waarde: {reviewState.currentValue}</p>
+          <p>Field: {reviewState.fieldName} - Current value: {reviewState.currentValue}</p>
           <DocumentReviewForm 
-            fieldName={reviewState.fieldName ?? ''} 
+            fieldName={reviewState.fieldName}
             currentValue={reviewState.currentValue} 
-            onSubmit={submitCorrections} 
+            onSubmit={async value => {
+              await submitCorrections(reviewState.fieldName, value);
+            }}
             isLoading={isLoading} 
           />
           <ApproveRejectButtons 
-            documentId={documentId}
-            canApprove={approve}
-            canReject={reject}
-            canApprove={reviewState?.canApprove}
-            canReject={reviewState?.canReject} onApprove={function (request?: any): Promise<void>
-            {
-              throw new Error('Function not implemented.');
-            } } onReject={function (request: any): Promise<void>
-            {
-              throw new Error('Function not implemented.');
-            } }          />
+            canApprove={reviewState.canApprove}
+            canReject={reviewState.canReject}
+            onApprove={async () => {
+              await approve();
+              navigate('/');
+            }}
+            onReject={async reason => {
+              await reject({ reason });
+              navigate('/');
+            }}
+          />
         </div>
       ) : (
-        <p>Geen review-gegevens beschikbaar</p>
+        <p>{reviewError ?? 'No extracted fields are available to review.'}</p>
       )}
       
-      <Link to="/">← Terug naar lijst</Link>
+      <Link to="/">Back to documents</Link>
     </div>
   );
 };

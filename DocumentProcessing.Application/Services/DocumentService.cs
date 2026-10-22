@@ -32,18 +32,18 @@ public class DocumentService : IDocumentService
         string contentType,
         CancellationToken cancellationToken = default)
     {
-        var validationErrors = ValidateFile(fileStream, originalFileName, contentType, _options.MaxFileSizeBytes).ToList();
+        var safeFileName = GetSafeFileName(originalFileName);
+        var validationErrors = ValidateFile(fileStream, safeFileName, contentType, _options.MaxFileSizeBytes).ToList();
         if (validationErrors.Count > 0)
         {
-            _logger.LogWarning("Document validation failed for {FileName}: {Errors}",
-                originalFileName, string.Join("; ", validationErrors));
+            _logger.LogWarning("Document upload validation failed: {Errors}", string.Join("; ", validationErrors));
             throw new ValidationException("Document upload validation failed.", validationErrors);
         }
 
         var contentHash = ComputeContentHash(fileStream);
         fileStream.Position = 0;
 
-        var storageKey = GenerateStorageKey(originalFileName);
+        var storageKey = GenerateStorageKey();
 
         string? storedStorageKey = null;
         try
@@ -52,12 +52,12 @@ public class DocumentService : IDocumentService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to store file {StorageKey}", storageKey);
+            _logger.LogError(ex, "Failed to store uploaded document.");
             throw new StorageException("Failed to store uploaded file.", ex);
         }
 
         var document = Document.Create(
-            originalFileName: originalFileName,
+            originalFileName: safeFileName,
             contentType: contentType,
             fileSize: fileStream.Length,
             contentHash: contentHash,
@@ -70,20 +70,19 @@ public class DocumentService : IDocumentService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to save document metadata for {StorageKey}. Attempting cleanup of stored file.", storedStorageKey);
+            _logger.LogError(ex, "Failed to save document metadata. Attempting stored file cleanup.");
             try
             {
                 await _fileStorage.DeleteAsync(storedStorageKey, cancellationToken);
             }
             catch (Exception cleanupEx)
             {
-                _logger.LogError(cleanupEx, "Cleanup of orphaned file {StorageKey} failed after database error.", storedStorageKey);
+                _logger.LogError(cleanupEx, "Cleanup of an orphaned document failed after a database error.");
             }
             throw new StorageException("Failed to save document metadata.", ex);
         }
 
-        _logger.LogInformation("Document {DocumentId} uploaded successfully with storage key {StorageKey}",
-            document.Id, storedStorageKey);
+        _logger.LogInformation("Document {DocumentId} uploaded successfully.", document.Id);
 
         return new UploadDocumentResponse
         {
@@ -135,6 +134,12 @@ public class DocumentService : IDocumentService
             yield return "Only PDF files are allowed.";
         }
 
+        if (!string.Equals(contentType, "application/pdf", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(contentType, "application/octet-stream", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "Content type must be application/pdf or application/octet-stream.";
+        }
+
         if (fileStream.Length == 0)
         {
             yield return "File cannot be empty.";
@@ -170,11 +175,20 @@ public class DocumentService : IDocumentService
         return Convert.ToHexString(hashBytes);
     }
 
-    private static string GenerateStorageKey(string originalFileName)
+    private static string GetSafeFileName(string originalFileName)
     {
-        var fileId = Guid.NewGuid().ToString("N");
-        var extension = Path.GetExtension(originalFileName)?.ToLowerInvariant() ?? ".pdf";
-        return $"{fileId}{extension}";
+        if (string.IsNullOrWhiteSpace(originalFileName))
+        {
+            return string.Empty;
+        }
+
+        var fileName = Path.GetFileName(originalFileName.Replace('\\', '/'));
+        return new string(fileName.Where(character => !char.IsControl(character)).ToArray());
+    }
+
+    private static string GenerateStorageKey()
+    {
+        return $"{Guid.NewGuid():N}.pdf";
     }
 
     private static DocumentDto MapToDto(Document document)
@@ -185,8 +199,6 @@ public class DocumentService : IDocumentService
             OriginalFileName = document.OriginalFileName,
             ContentType = document.ContentType,
             FileSize = document.FileSize,
-            ContentHash = document.ContentHash,
-            StorageKey = document.StorageKey,
             Status = document.Status.ToString(),
             CreatedAtUtc = document.CreatedAtUtc
         };

@@ -40,7 +40,6 @@ public class DocumentsController : ControllerBase
     /// <response code="400">Validation failed.</response>
     /// <response code="500">Internal server error.</response>
     [HttpPost]
-    [AllowAnonymous]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(UploadDocumentResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
@@ -59,8 +58,7 @@ public class DocumentsController : ControllerBase
             });
         }
 
-        _logger.LogInformation("Uploading document: {FileName} ({ContentType}, {Length} bytes)",
-            file.FileName, file.ContentType, file.Length);
+        _logger.LogInformation("Uploading PDF document ({Length} bytes)", file.Length);
 
         using var stream = file.OpenReadStream();
 

@@ -38,11 +38,11 @@ public class LocalFileStorage : IFileStorage
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to store file at {FullPath}", fullPath);
-            throw new Application.Exceptions.StorageException($"Failed to store file: {storageKey}", ex);
+            _logger.LogError(ex, "Failed to store document in local file storage.");
+            throw new Application.Exceptions.StorageException("Failed to store document.", ex);
         }
 
-        _logger.LogInformation("File stored at {StorageKey} ({FullPath})", storageKey, fullPath);
+        _logger.LogInformation("Document stored in local file storage.");
         return storageKey;
     }
 
@@ -54,13 +54,13 @@ public class LocalFileStorage : IFileStorage
             if (File.Exists(fullPath))
             {
                 File.Delete(fullPath);
-                _logger.LogInformation("File deleted: {StorageKey}", storageKey);
+                _logger.LogInformation("Stored document deleted.");
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to delete file {StorageKey}", storageKey);
-            throw new Application.Exceptions.StorageException($"Failed to delete file: {storageKey}", ex);
+            _logger.LogError(ex, "Failed to delete stored document.");
+            throw new Application.Exceptions.StorageException("Failed to delete stored document.", ex);
         }
         return Task.CompletedTask;
     }
@@ -70,7 +70,7 @@ public class LocalFileStorage : IFileStorage
         var fullPath = GetFullPath(storageKey);
         if (!File.Exists(fullPath))
         {
-            throw new FileNotFoundException($"File not found: {storageKey}", fullPath);
+            throw new FileNotFoundException("Stored document was not found.");
         }
         return Task.FromResult<Stream>(new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read));
     }
@@ -90,7 +90,10 @@ public class LocalFileStorage : IFileStorage
         var fullBasePath = Path.GetFullPath(_basePath);
         var combinedPath = Path.GetFullPath(Path.Combine(fullBasePath, storageKey));
 
-        if (!combinedPath.StartsWith(fullBasePath, StringComparison.OrdinalIgnoreCase))
+        var relativePath = Path.GetRelativePath(fullBasePath, combinedPath);
+        if (Path.IsPathRooted(relativePath) ||
+            relativePath.Equals("..", StringComparison.Ordinal) ||
+            relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
         {
             throw new Application.Exceptions.StorageException("Invalid storage key: directory traversal attempted.");
         }

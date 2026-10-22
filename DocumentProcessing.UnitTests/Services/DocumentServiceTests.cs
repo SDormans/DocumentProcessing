@@ -89,8 +89,6 @@ public class DocumentServiceTests
             OriginalFileName = d.OriginalFileName,
             ContentType = d.ContentType,
             FileSize = d.FileSize,
-            ContentHash = d.ContentHash,
-            StorageKey = d.StorageKey,
             Status = d.Status.ToString(),
             CreatedAtUtc = d.CreatedAtUtc
         }));

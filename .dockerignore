@@ -1,0 +1,13 @@
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/data
+**/appsettings*.json
+**/*.pdf
+.git
+.vs
+.env
+**/.env
+evaluation-data/generated
+TestResults

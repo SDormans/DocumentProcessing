@@ -77,8 +77,6 @@ public class DocumentReviewService : IDocumentReviewService
             OriginalFileName = document.OriginalFileName,
             ContentType = document.ContentType,
             FileSize = document.FileSize,
-            ContentHash = document.ContentHash,
-            StorageKey = document.StorageKey,
             Status = document.Status.ToString(),
             CreatedAtUtc = document.CreatedAtUtc,
             LastProcessedAtUtc = document.LastProcessedAtUtc,

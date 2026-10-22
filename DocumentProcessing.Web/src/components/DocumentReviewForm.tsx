@@ -29,7 +29,7 @@ export const DocumentReviewForm: React.FC<DocumentReviewFormProps> = ({
     try {
       await onSubmit(String(value));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Onbekende fout');
+      setError(err instanceof Error ? err.message : 'Unknown error.');
     } finally {
       setSubmitting(false);
     }
@@ -37,22 +37,22 @@ export const DocumentReviewForm: React.FC<DocumentReviewFormProps> = ({
 
   return (
     <div className="review-form">
-      <h3>Correctie voor {fieldName}</h3>
-      <p>Huidige waarde: {String(currentValue ?? 'N/A')}</p>
+      <h3>Correct {fieldName}</h3>
+      <p>Current value: {String(currentValue ?? 'N/A')}</p>
       <form onSubmit={handleSubmit}>
         <input
           type="text"
           value={String(value)}
           onChange={handleChange}
-          placeholder="Nieuwe waarde invoeren"
+          placeholder="Enter a corrected value"
           required
           disabled={isLoading}
         />
         <button type="submit" disabled={isLoading || submitting}>
-          {isLoading ? 'Bezig...' : submitting ? 'Opslaan...' : 'Opslaan'}
+          {isLoading ? 'Loading...' : submitting ? 'Saving...' : 'Save correction'}
         </button>
       </form>
-      {error && <p className="error">Fout: {error}</p>}
+      {error && <p className="error">Error: {error}</p>}
     </div>
   );
 };

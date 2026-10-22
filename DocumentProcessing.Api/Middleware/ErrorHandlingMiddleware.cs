@@ -67,9 +67,9 @@ public class ErrorHandlingMiddleware
                 response.Message = notFoundEx.Message;
                 break;
 
-            case StorageException storageEx:
+            case StorageException:
                 statusCode = HttpStatusCode.InternalServerError;
-                response.Message = storageEx.Message;
+                response.Message = "Document storage failed.";
                 break;
 
             case DocumentProcessingException domainEx:

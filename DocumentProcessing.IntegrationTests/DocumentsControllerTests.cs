@@ -6,6 +6,7 @@ using DocumentProcessing.Domain.Interfaces;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Moq;
 using System.IO;
 using System.Text.Json;
@@ -30,6 +31,18 @@ public class DocumentsControllerTests
                 HttpContext = new DefaultHttpContext { TraceIdentifier = "test-trace-id" }
             }
         };
+    }
+
+    [Fact]
+    public void DocumentsController_RequiresAuthenticatedUsers()
+    {
+        var controllerAuthorization = typeof(DocumentsController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>();
+        var uploadMethod = typeof(DocumentsController).GetMethod(nameof(DocumentsController.UploadDocument))!;
+
+        controllerAuthorization.Should().Contain(attribute => attribute.Policy == "CanReviewDocuments");
+        uploadMethod.GetCustomAttributes(typeof(AllowAnonymousAttribute), inherit: true).Should().BeEmpty();
     }
 
     [Fact]
@@ -111,8 +124,6 @@ public class DocumentsControllerTests
             OriginalFileName = "test.pdf",
             ContentType = "application/pdf",
             FileSize = 100,
-            ContentHash = "hash",
-            StorageKey = "storage/key.pdf",
             Status = "Uploaded",
             CreatedAtUtc = DateTime.UtcNow
         };

@@ -1,6 +1,11 @@
 import React from 'react';
 
-export const DocumentListItem: React.FC<{ document: any }> = ({ document }) => {
+interface DocumentSummary {
+  originalFileName: string;
+  status: string;
+}
+
+export const DocumentListItem: React.FC<{ document: DocumentSummary }> = ({ document }) => {
   return (
     <div>
       <span>{document.originalFileName}</span>

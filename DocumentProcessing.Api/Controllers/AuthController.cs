@@ -4,13 +4,14 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 
 namespace DocumentProcessing.Api.Controllers;
 
 /// <summary>
 /// Authenticatie-eindpunten voor de review-interface.
-/// In development worden gebruikers beheerd door DevelopmentUserService (in-memory, seeded).
+/// Users are stored in memory and can be bootstrapped through configuration.
 /// </summary>
 [ApiController]
 [Route("api/auth")]
@@ -31,6 +32,7 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting("login")]
     [ProducesResponseType(typeof(UserInfoDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
@@ -43,7 +45,7 @@ public class AuthController : ControllerBase
         var user = await _userService.ValidateUserAsync(request.Username, request.Password, cancellationToken);
         if (user == null)
         {
-            _logger.LogWarning("Mislukte loginpoging voor gebruiker {Username}", request.Username);
+            _logger.LogWarning("Login attempt failed.");
             return Unauthorized(new { message = "Ongeldige gebruikersnaam of wachtwoord." });
         }
 
@@ -66,7 +68,7 @@ public class AuthController : ControllerBase
 
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
-        _logger.LogInformation("Gebruiker {UserName} (ID: {UserId}) ingelogd", user.UserName, user.UserId);
+        _logger.LogInformation("User {UserId} signed in.", user.UserId);
 
         return Ok(user);
     }
@@ -121,52 +123,34 @@ public class AuthController : ControllerBase
             string.IsNullOrWhiteSpace(request.Password) ||
             string.IsNullOrWhiteSpace(request.Email))
         {
-            return BadRequest(new { message = "Gebruikersnaam, wachtwoord en e-mail zijn verplicht." });
+            return BadRequest(new { message = "Username, password, and email are required." });
         }
 
         if (await _userService.UserExistsAsync(request.Username))
         {
-            return BadRequest(new { message = "Gebruiker bestaat al." });
+            return BadRequest(new { message = "The user already exists." });
+        }
+
+        var role = request.Role ?? "Reviewer";
+        if (role is not ("Admin" or "Reviewer"))
+        {
+            return BadRequest(new { message = "The requested role is not supported." });
         }
 
         try
         {
             var user = await _userService.CreateUserAsync(
-                request.Username, request.Password, request.Email, request.Role ?? "Reviewer");
+                request.Username, request.Password, request.Email, role);
 
-            _logger.LogInformation("Gebruiker {Username} aangemaakt door {CreatedBy}", request.Username,
-                User.FindFirst(ClaimTypes.Name)?.Value ?? "onbekend");
+            _logger.LogInformation("User {UserId} created by {CreatedBy}.", user.UserId,
+                User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "unknown");
 
             return CreatedAtAction(nameof(Me), user);
         }
-        catch (Exception ex)
+        catch (InvalidOperationException)
         {
-            return BadRequest(new { message = ex.Message });
+            return Conflict(new { message = "The user could not be created." });
         }
-    }
-
-    /// <summary>
-    /// Geeft een overzicht van de beschikbare rollen en development-gebruikers.
-    /// </summary>
-    [HttpGet("development-info")]
-    [AllowAnonymous]
-    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
-    public IActionResult DevelopmentInfo()
-    {
-        return Ok(new
-        {
-            message = "Development authenticatie-informatie",
-            users = new[]
-            {
-                new { username = "admin", password = "Admin123!", role = "Admin", email = "admin@documentprocessing.local" },
-                new { username = "reviewer", password = "Reviewer123!", role = "Reviewer", email = "reviewer@documentprocessing.local" }
-            },
-            policies = new[] { "CanReviewDocuments", "CanApproveReject", "IsAdmin" },
-            loginEndpoint = "/api/auth/login",
-            logoutEndpoint = "/api/auth/logout",
-            meEndpoint = "/api/auth/me",
-            registerEndpoint = "/api/auth/register (alleen Admin)"
-        });
     }
 }
 

@@ -1,10 +1,12 @@
 {
   "name": "documentprocessing",
   "version": "1.0.0",
-  "description": "ASP.NET Core Web API voor veilig uploaden, valideren en opslaan van PDF-documenten.\r Dit is Stap 1 van het AI Document Processing Platform — OCR, AI-extractie en\r background processing komen in latere fasen.",
-  "main": "index.js",
+  "description": "Synthetic invoice extraction evaluation tooling for DocumentProcessing",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dataset:generate": "node tools/evaluation/generate-dataset.mjs --run",
+    "dataset:pdfs": "node tools/evaluation/generate-dataset.mjs --run --pdf-dir evaluation-data/generated/pdfs",
+    "evaluate": "node tools/evaluation/evaluate.mjs",
+    "test": "node --test tools/evaluation/*.test.mjs"
   },
   "repository": {
     "type": "git",
