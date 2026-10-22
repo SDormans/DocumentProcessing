@@ -1,7 +1,12 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace DocumentProcessing.Application.Services.Invoice;
 
 /// <summary>
-/// Interface voor factuurgegevensextractie.
+/// Contract for extracting structured invoice information.
 /// </summary>
 public interface IInvoiceExtractor
 {
@@ -10,7 +15,7 @@ public interface IInvoiceExtractor
 }
 
 /// <summary>
-/// Resultaat van factuurgegevensextractie.
+/// Represents the result of an invoice extraction operation.
 /// </summary>
 public class InvoiceExtractionResult
 {
@@ -32,11 +37,11 @@ public class InvoiceExtractionResult
     public bool TotalAmountHasValue { get; set; }
     public List<string>? Lines { get; set; }
     public bool LinesHasValue { get; set; }
-    public List<string> Warnings { get; set; } = new List<string>();
+    public List<string> Warnings { get; set; } = new();
     public string? RawResponse { get; init; }
     public bool Success { get; init; }
     public string ExtractionMethod { get; set; } = "Unknown";
-    public int ExtractionVersion { get; set; }
+    public int ExtractionVersion { get; set; } = 1;
     public int PageCount { get; set; }
     public int TotalCharacterCount { get; set; }
 
@@ -52,13 +57,35 @@ public class InvoiceExtractionResult
     {
         RawResponse = rawResponse,
         Success = true,
-        // De velden worden overgenomen van 'data' via de constructor/initializers
+        SupplierName = data.SupplierName,
+        SupplierNameHasValue = data.SupplierNameHasValue,
+        InvoiceNumber = data.InvoiceNumber,
+        InvoiceNumberHasValue = data.InvoiceNumberHasValue,
+        InvoiceDate = data.InvoiceDate,
+        InvoiceDateHasValue = data.InvoiceDateHasValue,
+        DueDate = data.DueDate,
+        DueDateHasValue = data.DueDateHasValue,
+        Currency = data.Currency,
+        CurrencyHasValue = data.CurrencyHasValue,
+        Subtotal = data.Subtotal,
+        SubtotalHasValue = data.SubtotalHasValue,
+        TaxAmount = data.TaxAmount,
+        TaxAmountHasValue = data.TaxAmountHasValue,
+        TotalAmount = data.TotalAmount,
+        TotalAmountHasValue = data.TotalAmountHasValue,
+        Lines = data.Lines,
+        LinesHasValue = data.LinesHasValue,
+        Warnings = data.Warnings != null ? new List<string>(data.Warnings) : new List<string>(),
+        ExtractionMethod = data.ExtractionMethod,
+        ExtractionVersion = data.ExtractionVersion,
+        PageCount = data.PageCount,
+        TotalCharacterCount = data.TotalCharacterCount
     };
 
     public static InvoiceExtractionResult FailureResult(string errorMessage, string rawResponse = "") => new()
     {
         RawResponse = rawResponse,
         Success = false,
-        // De velden worden standaard ingesteld op null/false
+        Warnings = string.IsNullOrWhiteSpace(errorMessage) ? new List<string>() : new List<string> { errorMessage }
     };
 }

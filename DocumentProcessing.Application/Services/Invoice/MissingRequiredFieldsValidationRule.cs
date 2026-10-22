@@ -1,29 +1,29 @@
-using DocumentProcessing.Application.Services.Invoice;
+namespace DocumentProcessing.Application.Services.Invoice;
 
 /// <summary>
-/// Valideert of verplichte velden aanwezig zijn.
-/// Welke velden verplicht zijn, kan worden configured via de configuratie.
+/// Validates that mandatory invoice fields are present.
 /// </summary>
 public class MissingRequiredFieldsValidationRule : IInvoiceValidationRule
 {
+    private static readonly string[] DefaultRequiredFields = { "SupplierName", "InvoiceNumber", "InvoiceDate", "TotalAmount" };
     private readonly IEnumerable<string> _requiredFields;
 
     /// <summary>
-    /// Initialiseert een nieuwe instantie van de <see cref="MissingRequiredFieldsValidationRule"/> klasse.
+    /// Initializes a new instance of the <see cref="MissingRequiredFieldsValidationRule"/> class.
     /// </summary>
-    /// <param name="requiredFields">Lijst met vereiste velden (e.g. "InvoiceNumber", "InvoiceDate").</param>
-    public MissingRequiredFieldsValidationRule(IEnumerable<string> requiredFields)
+    /// <param name="requiredFields">List of required fields (e.g. "InvoiceNumber", "InvoiceDate"). Defaults to standard fields.</param>
+    public MissingRequiredFieldsValidationRule(IEnumerable<string>? requiredFields = null)
     {
-        _requiredFields = requiredFields ?? throw new ArgumentNullException(nameof(requiredFields));
+        _requiredFields = requiredFields ?? DefaultRequiredFields;
     }
 
     /// <summary>
-    /// Unieke identifier van deze regel.
+    /// Unique identifier for this rule.
     /// </summary>
     public string RuleId => "MISSING_REQUIRED_FIELDS";
 
     /// <summary>
-    /// Voert de validatie uit op het extractieresultaat.
+    /// Executes validation against the extracted invoice result.
     /// </summary>
     public IEnumerable<ValidationResult> Validate(InvoiceExtractionResult result)
     {
@@ -33,11 +33,11 @@ public class MissingRequiredFieldsValidationRule : IInvoiceValidationRule
         {
             bool hasValue = field switch
             {
-                "SupplierName" => result.SupplierNameHasValue && !string.IsNullOrEmpty(result.SupplierName),
-                "InvoiceNumber" => result.InvoiceNumberHasValue && !string.IsNullOrEmpty(result.InvoiceNumber),
+                "SupplierName" => result.SupplierNameHasValue && !string.IsNullOrWhiteSpace(result.SupplierName),
+                "InvoiceNumber" => result.InvoiceNumberHasValue && !string.IsNullOrWhiteSpace(result.InvoiceNumber),
                 "InvoiceDate" => result.InvoiceDateHasValue && result.InvoiceDate.HasValue,
                 "DueDate" => result.DueDateHasValue && result.DueDate.HasValue,
-                "Currency" => result.CurrencyHasValue && !string.IsNullOrEmpty(result.Currency),
+                "Currency" => result.CurrencyHasValue && !string.IsNullOrWhiteSpace(result.Currency),
                 "Subtotal" => result.SubtotalHasValue && result.Subtotal.HasValue,
                 "TaxAmount" => result.TaxAmountHasValue && result.TaxAmount.HasValue,
                 "TotalAmount" => result.TotalAmountHasValue && result.TotalAmount.HasValue,
@@ -52,7 +52,7 @@ public class MissingRequiredFieldsValidationRule : IInvoiceValidationRule
                     RuleId = RuleId,
                     Status = ValidationStatus.Failing.ToString(),
                     Severity = ValidationSeverity.Error.ToString(),
-                    Message = $"Veld '{field}' is vereist maar ontbreekt of is leeg.",
+                    Message = $"Field '{field}' is required but is missing or empty.",
                     AffectedFields = field,
                     ExtraData = new { Found = hasValue }
                 });

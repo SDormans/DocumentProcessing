@@ -7,6 +7,8 @@ bin/
 obj/
 out/
 publish/
+node_modules/
+dist/
 
 # Visual Studio
 .vs/
@@ -55,8 +57,9 @@ secrets.json
 *.edmx
 
 # Uploaded documents and generated artifacts
-data/
-storage/
+/data/
+/storage/
+DocumentProcessing.Api/data/
 *.pdf
 *.doc
 *.docx

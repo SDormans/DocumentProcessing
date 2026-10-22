@@ -41,7 +41,6 @@ namespace DocumentProcessing.Infrastructure.Data.Configurations
             builder.Property(d => d.WarningsJson).HasMaxLength(4000);
 
             // Indexes
-            builder.HasIndex(d => d.DocumentId);
             builder.HasIndex(d => new { d.DocumentId, d.ExtractionVersion }).IsUnique();
 
             // Relationship

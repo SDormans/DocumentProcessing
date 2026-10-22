@@ -1,9 +1,15 @@
 using DocumentProcessing.Application.DTOs;
 using DocumentProcessing.Application.Services;
-using DocumentProcessing.Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Net.Mime;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace DocumentProcessing.Api.Controllers;
 
@@ -14,19 +20,13 @@ namespace DocumentProcessing.Api.Controllers;
 public class DocumentsController : ControllerBase
 {
     private readonly IDocumentService _documentService;
-    private readonly IDocumentRepository _documentRepository;
-    private readonly IFileStorage _fileStorage;
     private readonly ILogger<DocumentsController> _logger;
 
     public DocumentsController(
         IDocumentService documentService,
-        IDocumentRepository documentRepository,
-        IFileStorage fileStorage,
         ILogger<DocumentsController> logger)
     {
         _documentService = documentService;
-        _documentRepository = documentRepository;
-        _fileStorage = fileStorage;
         _logger = logger;
     }
 
@@ -54,8 +54,8 @@ public class DocumentsController : ControllerBase
             return BadRequest(new ErrorResponse
             {
                 TraceId = HttpContext.TraceIdentifier,
-                Message = "Geen bestand opgegeven.",
-                Errors = new[] { "Bestand is verplicht." }
+                Message = "No file provided.",
+                Errors = new[] { "File is required." }
             });
         }
 
@@ -115,7 +115,7 @@ public class DocumentsController : ControllerBase
             return NotFound(new ErrorResponse
             {
                 TraceId = HttpContext.TraceIdentifier,
-                Message = $"Document met ID {id} niet gevonden."
+                Message = $"Document with ID {id} not found."
             });
         }
 
@@ -123,36 +123,33 @@ public class DocumentsController : ControllerBase
     }
 
     /// <summary>
-    /// Geeft het originele PDF-document terug via een geautoriseerd endpoint.
-    /// Bestanden zijn niet direct via onbeveiligde URL's beschikbaar.
+    /// Returns the original PDF document via an authorized endpoint.
     /// </summary>
     [HttpGet("{id:guid}/content")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetDocumentContent(Guid id, CancellationToken cancellationToken)
     {
-        var document = await _documentRepository.GetByIdAsync(id, cancellationToken);
-
-        if (document == null)
-        {
-            return NotFound(new ErrorResponse
-            {
-                TraceId = HttpContext.TraceIdentifier,
-                Message = $"Document met ID {id} niet gevonden."
-            });
-        }
-
         try
         {
-            var stream = await _fileStorage.OpenReadAsync(document.StorageKey, cancellationToken);
-            return File(stream, MediaTypeNames.Application.Pdf, document.OriginalFileName);
+            var fileDto = await _documentService.GetDocumentFileAsync(id, cancellationToken);
+            if (fileDto == null)
+            {
+                return NotFound(new ErrorResponse
+                {
+                    TraceId = HttpContext.TraceIdentifier,
+                    Message = $"Document with ID {id} not found."
+                });
+            }
+
+            return File(fileDto.Stream, fileDto.ContentType, fileDto.FileName);
         }
         catch (FileNotFoundException)
         {
             return NotFound(new ErrorResponse
             {
                 TraceId = HttpContext.TraceIdentifier,
-                Message = $"Het PDF-bestand voor document {id} kon niet worden gevonden."
+                Message = $"The PDF file for document {id} could not be found."
             });
         }
     }

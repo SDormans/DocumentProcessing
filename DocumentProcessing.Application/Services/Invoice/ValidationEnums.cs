@@ -1,51 +1,53 @@
+namespace DocumentProcessing.Application.Services.Invoice;
+
 /// <summary>
-/// De mogelijke statussen van een validatieresultaat.
+/// Possible statuses for an invoice validation result.
 /// </summary>
 public enum ValidationStatus
 {
     /// <summary>
-    /// De validatie is doorlopen zonder fouten of waarschuwingen.
+    /// Validation passed without errors or warnings.
     /// </summary>
     Passing,
 
     /// <summary>
-    /// Er is een fout gevonden die aandacht vereist, maar het document is niet direct onbruikbaar.
+    /// An error was found that requires attention.
     /// </summary>
     Failing,
 
     /// <summary>
-    /// Er is een waarschuwing gevonden die de kwaliteit beïnvloedt, maar het document kan nog worden verwerkt.
+    /// A warning was found that affects quality but does not invalidate the document.
     /// </summary>
     Warning,
 
     /// <summary>
-    /// Informatieboodschap, geen fout of waarschuwing.
+    /// Informational message, neither error nor warning.
     /// </summary>
     Info
 }
 
 /// <summary>
-/// De mogelijke ernstniveaus van een validatiefout.
+/// Severity levels for invoice validation issues.
 /// </summary>
 public enum ValidationSeverity
 {
     /// <summary>
-    /// Kritiek probleem dat automatische verwerking verhindert.
+    /// Critical issue that prevents automated processing.
     /// </summary>
     Critical,
 
     /// <summary>
-    /// Foutieve of onbetrouwbare gegevens.
+    /// Incorrect or untrustworthy data.
     /// </summary>
     Error,
 
     /// <summary>
-    /// Mogelijk probleem, maar kan nog steeds worden verwerkt met voorzichtigheid.
+    /// Potential issue that should be reviewed.
     /// </summary>
     Warning,
 
     /// <summary>
-    /// Normale informatie, geen probleem.
+    /// Informational detail.
     /// </summary>
     Info
 }

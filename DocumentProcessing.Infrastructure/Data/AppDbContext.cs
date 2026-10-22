@@ -22,28 +22,12 @@ public DbSet<QueueCommand> QueueCommands => Set<QueueCommand>();
     {
         base.OnModelCreating(modelBuilder);
 
+        modelBuilder.ApplyConfiguration(new DocumentConfiguration());
         modelBuilder.ApplyConfiguration(new DocumentTextExtractionConfiguration());
         modelBuilder.ApplyConfiguration(new InvoiceExtractionResultConfiguration());
         modelBuilder.ApplyConfiguration(new DocumentReviewConfiguration());
         modelBuilder.ApplyConfiguration(new ReviewAuditEntryConfiguration());
         modelBuilder.ApplyConfiguration(new QueueCommandConfiguration());
-
-        modelBuilder.Entity<Document>(entity =>
-        {
-            entity.ToTable("Documents");
-            entity.HasKey(d => d.Id);
-            entity.Property(d => d.Id).ValueGeneratedNever();
-            entity.Property(d => d.OriginalFileName).IsRequired().HasMaxLength(500);
-            entity.Property(d => d.ContentType).IsRequired().HasMaxLength(200);
-            entity.Property(d => d.ContentHash).IsRequired().HasMaxLength(128);
-            entity.Property(d => d.StorageKey).IsRequired().HasMaxLength(500);
-            entity.Property(d => d.Status).IsRequired();
-            entity.Property(d => d.CreatedAtUtc).IsRequired();
-            entity.Property(d => d.FileSize).IsRequired();
-
-            entity.HasIndex(d => d.CreatedAtUtc);
-            entity.HasIndex(d => d.Status);
-        });
     }
 
     public async Task AddAsync(Document document, CancellationToken cancellationToken = default)
@@ -56,11 +40,11 @@ public DbSet<QueueCommand> QueueCommands => Set<QueueCommand>();
         return Documents.FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
     }
 
-    public Task<IReadOnlyList<Document>> GetAllAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<Document>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        return Documents.OrderByDescending(d => d.CreatedAtUtc)
-            .ToListAsync(cancellationToken)
-            .ContinueWith(t => (IReadOnlyList<Document>)t.Result, cancellationToken);
+        return await Documents
+            .OrderByDescending(d => d.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
     }
 
     public Task UpdateAsync(Document document, CancellationToken cancellationToken = default)
@@ -107,12 +91,11 @@ public DbSet<QueueCommand> QueueCommands => Set<QueueCommand>();
         return ReviewAuditEntries.AddAsync(entry, cancellationToken).AsTask();
     }
 
-    Task<IReadOnlyList<ReviewAuditEntry>> IDocumentReviewRepository.GetAuditEntriesAsync(Guid documentReviewId, CancellationToken cancellationToken)
+    async Task<IReadOnlyList<ReviewAuditEntry>> IDocumentReviewRepository.GetAuditEntriesAsync(Guid documentReviewId, CancellationToken cancellationToken)
     {
-        return ReviewAuditEntries
+        return await ReviewAuditEntries
             .Where(a => a.DocumentReviewId == documentReviewId)
             .OrderByDescending(a => a.CreatedAtUtc)
-            .ToListAsync(cancellationToken)
-            .ContinueWith(t => (IReadOnlyList<ReviewAuditEntry>)t.Result, cancellationToken);
+            .ToListAsync(cancellationToken);
     }
 }

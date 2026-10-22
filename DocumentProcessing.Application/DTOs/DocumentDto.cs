@@ -25,3 +25,10 @@ public class ErrorResponse
     public string Message { get; set; } = string.Empty;
     public IEnumerable<string>? Errors { get; set; }
 }
+
+public class DocumentFileDto
+{
+    public Stream Stream { get; set; } = Stream.Null;
+    public string ContentType { get; set; } = "application/pdf";
+    public string FileName { get; set; } = string.Empty;
+}

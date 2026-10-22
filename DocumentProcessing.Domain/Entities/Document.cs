@@ -1,3 +1,5 @@
+using System;
+
 namespace DocumentProcessing.Domain.Entities;
 
 public enum DocumentStatus
@@ -47,7 +49,7 @@ public class Document
     public DateTime CreatedAtUtc { get; private set; }
 
     /// <summary>
-    /// Datum van de laatste verwerking/review van dit document.
+    /// Timestamp of the latest processing or review of this document in UTC.
     /// </summary>
     public DateTime? LastProcessedAtUtc { get; private set; }
 
@@ -69,13 +71,46 @@ public class Document
             DateTime.UtcNow);
     }
 
-    public void UpdateStatus(DocumentStatus status)
+    public void UpdateStatus(DocumentStatus newStatus)
     {
-        Status = status;
+        if (Status == newStatus)
+        {
+            return;
+        }
+
+        if (!IsValidStatusTransition(Status, newStatus))
+        {
+            throw new InvalidOperationException($"Invalid document status transition from '{Status}' to '{newStatus}'.");
+        }
+
+        Status = newStatus;
     }
 
     public void MarkProcessed()
     {
         LastProcessedAtUtc = DateTime.UtcNow;
     }
+
+    private static bool IsValidStatusTransition(DocumentStatus current, DocumentStatus next) => (current, next) switch
+    {
+        (DocumentStatus.Uploaded, DocumentStatus.Queued) => true,
+        (DocumentStatus.Uploaded, DocumentStatus.Processing) => true,
+        (DocumentStatus.Uploaded, DocumentStatus.Failed) => true,
+
+        (DocumentStatus.Queued, DocumentStatus.Processing) => true,
+        (DocumentStatus.Queued, DocumentStatus.Failed) => true,
+
+        (DocumentStatus.Processing, DocumentStatus.NeedsReview) => true,
+        (DocumentStatus.Processing, DocumentStatus.Completed) => true,
+        (DocumentStatus.Processing, DocumentStatus.Failed) => true,
+
+        (DocumentStatus.NeedsReview, DocumentStatus.Completed) => true,
+        (DocumentStatus.NeedsReview, DocumentStatus.Failed) => true,
+
+        // Allow reprocessing retry from Failed
+        (DocumentStatus.Failed, DocumentStatus.Queued) => true,
+        (DocumentStatus.Failed, DocumentStatus.Processing) => true,
+
+        _ => false
+    };
 }

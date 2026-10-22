@@ -1,11 +1,12 @@
 using DocumentProcessing.Domain.Enums;
+using System;
+using System.Collections.Generic;
 
 namespace DocumentProcessing.Domain.Entities;
 
 /// <summary>
-/// Houdt de menselijke review van een document bij.
-/// De originele AI-output wordt apart bewaard van menselijke correcties en goedgekeurde waarden,
-/// zodat niets stilzwijgend wordt overschreven.
+/// Tracks human review of an extracted document.
+/// Preserves original AI output separately from human corrections and approved values.
 /// </summary>
 public class DocumentReview
 {
@@ -30,31 +31,31 @@ public class DocumentReview
     public Guid DocumentId { get; private set; }
 
     /// <summary>
-    /// Originele AI-output (ongewijzigd bewaard).
+    /// Original unedited AI extraction output in JSON format.
     /// </summary>
     public string OriginalAiOutputJson { get; private set; } = string.Empty;
 
     /// <summary>
-    /// Door een mens aangebrachte correcties (nog niet goedgekeurd).
+    /// Human-supplied corrections before final approval in JSON format.
     /// </summary>
     public string? CorrectedValuesJson { get; private set; }
 
     /// <summary>
-    /// Uiteindelijk goedgekeurde waarden.
+    /// Final approved values in JSON format.
     /// </summary>
     public string? ApprovedValuesJson { get; private set; }
 
     public ReviewStatus Status { get; private set; }
 
     /// <summary>
-    /// Gebruiker die de review heeft uitgevoerd/laatst gewijzigd.
+    /// Identifier of the reviewer who performed or last updated the review.
     /// </summary>
     public string? ReviewedBy { get; private set; }
 
     public DateTime? ReviewedAtUtc { get; private set; }
 
     /// <summary>
-    /// Beslissing: "Approved" of "Rejected".
+    /// Final review decision: "Approved" or "Rejected".
     /// </summary>
     public string? ReviewDecision { get; private set; }
 
@@ -70,6 +71,11 @@ public class DocumentReview
 
     public void SetCorrections(string correctedValuesJson, string reviewedBy)
     {
+        if (Status == ReviewStatus.Approved || Status == ReviewStatus.Rejected)
+        {
+            throw new InvalidOperationException($"Cannot apply corrections to a review that is already {Status}.");
+        }
+
         CorrectedValuesJson = correctedValuesJson;
         ReviewedBy = reviewedBy;
         UpdatedAtUtc = DateTime.UtcNow;
@@ -82,6 +88,11 @@ public class DocumentReview
 
     public void SetApproved(string approvedValuesJson, string reviewedBy)
     {
+        if (Status == ReviewStatus.Approved || Status == ReviewStatus.Rejected)
+        {
+            throw new InvalidOperationException($"Cannot approve a review that is already {Status}.");
+        }
+
         ApprovedValuesJson = approvedValuesJson;
         ReviewedBy = reviewedBy;
         ReviewedAtUtc = DateTime.UtcNow;
@@ -92,6 +103,11 @@ public class DocumentReview
 
     public void SetRejected(string rejectionReason, string reviewedBy)
     {
+        if (Status == ReviewStatus.Approved || Status == ReviewStatus.Rejected)
+        {
+            throw new InvalidOperationException($"Cannot reject a review that is already {Status}.");
+        }
+
         ReviewedBy = reviewedBy;
         ReviewedAtUtc = DateTime.UtcNow;
         UpdatedAtUtc = DateTime.UtcNow;

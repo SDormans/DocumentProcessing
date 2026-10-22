@@ -1,4 +1,5 @@
 using DocumentProcessing.Domain.Enums;
+using System;
 
 namespace DocumentProcessing.Domain.Entities;
 
@@ -28,7 +29,7 @@ public class QueueCommand
         AttemptCount = 0;
         CreatedAtUtc = DateTime.UtcNow;
         LastErrorCategory = null;
-        NextAttemptAtUtc = DateTime.UtcNow.AddMinutes(1);
+        NextAttemptAtUtc = DateTime.UtcNow;
     }
 
     public void MarkProcessing()
@@ -48,6 +49,14 @@ public class QueueCommand
     {
         Status = QueueCommandStatus.Failed;
         LastErrorCategory = errorCategory;
+        CompletedAtUtc = DateTime.UtcNow;
+    }
+
+    public void RecordRetry(string errorCategory, TimeSpan delay)
+    {
+        Status = QueueCommandStatus.Pending;
+        LastErrorCategory = errorCategory;
+        NextAttemptAtUtc = DateTime.UtcNow + delay;
     }
 
     public void SetNextAttempt(TimeSpan delay)

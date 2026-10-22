@@ -17,18 +17,12 @@ public class DocumentsControllerTests
 {
     private readonly DocumentsController _controller;
     private readonly Mock<IDocumentService> _mockService;
-    private readonly Mock<IDocumentRepository> _mockRepository;
-    private readonly Mock<IFileStorage> _mockFileStorage;
 
     public DocumentsControllerTests()
     {
         _mockService = new Mock<IDocumentService>();
-        _mockRepository = new Mock<IDocumentRepository>();
-        _mockFileStorage = new Mock<IFileStorage>();
         _controller = new DocumentsController(
             _mockService.Object,
-            _mockRepository.Object,
-            _mockFileStorage.Object,
             new Mock<Microsoft.Extensions.Logging.ILogger<DocumentsController>>().Object)
         {
             ControllerContext = new ControllerContext

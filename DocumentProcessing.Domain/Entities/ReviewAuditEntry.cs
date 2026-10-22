@@ -1,8 +1,10 @@
+using System;
+
 namespace DocumentProcessing.Domain.Entities;
 
 /// <summary>
-/// Controleerbare controlelijst van elke reviewactie op een document.
-/// Registreert gebruiker, tijdstip, gewijzigde velden, oude/nieuwe waarde en actietype.
+/// Audit trail record for an action performed during document review.
+/// Captures user identifier, timestamp, affected fields, old/new values, and action type.
 /// </summary>
 public class ReviewAuditEntry
 {
@@ -32,22 +34,22 @@ public class ReviewAuditEntry
     public string UserName { get; private set; } = string.Empty;
 
     /// <summary>
-    /// Type actie: Correction, Approval of Rejection.
+    /// Type of action: Correction, Approval, or Rejection.
     /// </summary>
     public string ActionType { get; private set; } = string.Empty;
 
     /// <summary>
-    /// Naam van het gewijzigde veld (alleen bij correcties).
+    /// Name of the corrected field (for corrections).
     /// </summary>
     public string? FieldName { get; private set; }
 
     /// <summary>
-    /// Vorige waarde (alleen bij correcties, indien van toepassing en toegestaan).
+    /// Value prior to correction.
     /// </summary>
     public string? OldValue { get; private set; }
 
     /// <summary>
-    /// Nieuwe waarde (alleen bij correcties, indien van toepassing en toegestaan).
+    /// Value following correction.
     /// </summary>
     public string? NewValue { get; private set; }
 

@@ -13,4 +13,6 @@ public interface IDocumentService
     Task<DocumentDto?> GetDocumentAsync(Guid id, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<DocumentDto>> GetDocumentsAsync(CancellationToken cancellationToken = default);
+
+    Task<DocumentFileDto?> GetDocumentFileAsync(Guid id, CancellationToken cancellationToken = default);
 }

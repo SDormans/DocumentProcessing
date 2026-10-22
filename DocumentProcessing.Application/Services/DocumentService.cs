@@ -1,4 +1,4 @@
-﻿using DocumentProcessing.Application.DTOs;
+using DocumentProcessing.Application.DTOs;
 using DocumentProcessing.Application.Exceptions;
 using DocumentProcessing.Domain.Entities;
 using DocumentProcessing.Domain.Interfaces;
@@ -105,27 +105,44 @@ public class DocumentService : IDocumentService
         return documents.Select(MapToDto).ToList();
     }
 
+    public async Task<DocumentFileDto?> GetDocumentFileAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var document = await _documentRepository.GetByIdAsync(id, cancellationToken);
+        if (document == null)
+        {
+            return null;
+        }
+
+        var stream = await _fileStorage.OpenReadAsync(document.StorageKey, cancellationToken);
+        return new DocumentFileDto
+        {
+            Stream = stream,
+            ContentType = document.ContentType,
+            FileName = document.OriginalFileName
+        };
+    }
+
     private static IEnumerable<string> ValidateFile(Stream fileStream, string originalFileName, string contentType, long maxFileSizeBytes)
     {
         if (string.IsNullOrWhiteSpace(originalFileName))
         {
-            yield return "Bestandsnaam is verplicht.";
+            yield return "File name is required.";
             yield break;
         }
 
         if (!originalFileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
         {
-            yield return "Alleen PDF-bestanden zijn toegestaan.";
+            yield return "Only PDF files are allowed.";
         }
 
         if (fileStream.Length == 0)
         {
-            yield return "Bestand mag niet leeg zijn.";
+            yield return "File cannot be empty.";
         }
 
         if (fileStream.Length > maxFileSizeBytes)
         {
-            yield return $"Bestand is te groot. Maximale grootte is {maxFileSizeBytes / 1024 / 1024} MB.";
+            yield return $"File is too large. Maximum size is {maxFileSizeBytes / 1024 / 1024} MB.";
         }
 
         if (fileStream.Length > 0)
@@ -134,7 +151,7 @@ public class DocumentService : IDocumentService
             var bytesRead = fileStream.Read(pdfHeader, 0, 5);
             if (bytesRead < 5 || !IsPdfSignature(pdfHeader))
             {
-                yield return "Bestand is geen geldig PDF-bestand (ongeldige PDF-signatuur).";
+                yield return "File is not a valid PDF document (invalid PDF signature).";
             }
         }
     }

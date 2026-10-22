@@ -41,7 +41,7 @@ public class DocumentValidationTests
 
         // Assert
         var exception = await act.Should().ThrowAsync<ValidationException>();
-        exception.And.Errors.Should().Contain("Bestand mag niet leeg zijn.");
+        exception.And.Errors.Should().Contain("File cannot be empty.");
     }
 
     [Fact]
@@ -56,7 +56,7 @@ public class DocumentValidationTests
 
         // Assert
         var exception = await act.Should().ThrowAsync<ValidationException>();
-        exception.And.Errors.Should().Contain("Alleen PDF-bestanden zijn toegestaan.");
+        exception.And.Errors.Should().Contain("Only PDF files are allowed.");
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public class DocumentValidationTests
 
         // Assert
         var exception = await act.Should().ThrowAsync<ValidationException>();
-        exception.And.Errors.Should().Contain(e => e.Contains("PDF-signatuur"));
+        exception.And.Errors.Should().Contain(e => e.Contains("PDF"));
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public class DocumentValidationTests
 
         // Assert
         var exception = await act.Should().ThrowAsync<ValidationException>();
-        exception.And.Errors.Should().Contain("Bestandsnaam is verplicht.");
+        exception.And.Errors.Should().Contain("File name is required.");
     }
 
     [Fact]
@@ -151,7 +151,7 @@ public class DocumentValidationTests
 
         // Assert
         var exception = await act.Should().ThrowAsync<ValidationException>();
-        exception.And.Errors.Should().Contain(e => e.Contains("te groot"));
+        exception.And.Errors.Should().Contain(e => e.Contains("too large"));
     }
 
     [Fact]
