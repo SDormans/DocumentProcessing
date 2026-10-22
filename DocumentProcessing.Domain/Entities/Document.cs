@@ -46,6 +46,11 @@ public class Document
     public DocumentStatus Status { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
 
+    /// <summary>
+    /// Datum van de laatste verwerking/review van dit document.
+    /// </summary>
+    public DateTime? LastProcessedAtUtc { get; private set; }
+
     public static Document Create(
         string originalFileName,
         string contentType,
@@ -67,5 +72,10 @@ public class Document
     public void UpdateStatus(DocumentStatus status)
     {
         Status = status;
+    }
+
+    public void MarkProcessed()
+    {
+        LastProcessedAtUtc = DateTime.UtcNow;
     }
 }

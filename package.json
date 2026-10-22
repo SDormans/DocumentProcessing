@@ -1,0 +1,21 @@
+{
+  "name": "documentprocessing",
+  "version": "1.0.0",
+  "description": "ASP.NET Core Web API voor veilig uploaden, valideren en opslaan van PDF-documenten.\r Dit is Stap 1 van het AI Document Processing Platform — OCR, AI-extractie en\r background processing komen in latere fasen.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SDormans/DocumentProcessing.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/SDormans/DocumentProcessing/issues"
+  },
+  "homepage": "https://github.com/SDormans/DocumentProcessing#readme"
+}

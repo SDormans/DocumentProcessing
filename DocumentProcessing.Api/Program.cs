@@ -8,12 +8,15 @@ using DocumentProcessing.Infrastructure.Ocr;
 using DocumentProcessing.Infrastructure.Storage;
 using DocumentProcessing.Infrastructure.TextExtraction;
 using DocumentProcessing.Api.Middleware;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -38,6 +41,13 @@ builder.Services.AddScoped<IDocumentRepository>(
     sp => sp.GetRequiredService<AppDbContext>());
 builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
+builder.Services.AddScoped<ValidationService>();
+builder.Services.AddScoped<IDocumentReviewRepository>(
+    sp => sp.GetRequiredService<AppDbContext>());
+builder.Services.AddScoped<IInvoiceResultRepository>(
+    sp => sp.GetRequiredService<AppDbContext>());
+builder.Services.AddScoped<IDocumentReviewService, DocumentReviewService>();
+builder.Services.AddScoped<IUserService, DevelopmentUserService>();
 
 // Text extraction services
 builder.Services.AddScoped<IDocumentTextExtractor, PdfPigTextExtractor>();
@@ -52,6 +62,39 @@ builder.Services.AddScoped<IInvoiceExtractor, InvoiceExtractor>();
 // DocumentService options from configuration
 builder.Services.Configure<DocumentServiceOptions>(builder.Configuration.GetSection("DocumentService"));
 builder.Services.Configure<TextExtractionOptions>(builder.Configuration.GetSection("TextExtraction"));
+
+// Authentication (cookie-based, development-friendly)
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
+    {
+        options.Cookie.Name = "DocumentProcessing.Auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+            ? CookieSecurePolicy.None
+            : CookieSecurePolicy.Always;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        options.SlidingExpiration = true;
+        options.LoginPath = "/api/auth/login";
+        options.LogoutPath = "/api/auth/logout";
+        options.AccessDeniedPath = "/api/auth/forbidden";
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("CanReviewDocuments", policy =>
+        policy.RequireAuthenticatedUser());
+    options.AddPolicy("CanApproveReject", policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireAssertion(context =>
+            {
+                var role = context.User.FindFirst(ClaimTypes.Role)?.Value;
+                return role == "Admin" || role == "Reviewer";
+            }));
+    options.AddPolicy("IsAdmin", policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireRole("Admin"));
+});
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -71,6 +114,7 @@ if (app.Environment.IsDevelopment())
 app.UseMiddleware<ErrorHandlingMiddleware>();
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

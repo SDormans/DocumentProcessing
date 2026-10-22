@@ -22,6 +22,114 @@ namespace DocumentProcessing.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("DocumentProcessing.Application.Services.Invoice.InvoiceExtractionResultEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Currency")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<bool>("CurrencyHasValue")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DueDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("DueDateHasValue")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime>("ExtractedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExtractionMethod")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("ExtractionVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("InvoiceDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("InvoiceDateHasValue")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("InvoiceNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("InvoiceNumberHasValue")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LineItemsJson")
+                        .HasMaxLength(10000)
+                        .HasColumnType("character varying(10000)");
+
+                    b.Property<string>("Lines")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("LinesHasValue")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("PageCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RawAiResponse")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<decimal?>("Subtotal")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("SubtotalHasValue")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("SupplierName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("SupplierNameHasValue")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal?>("TaxAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("TaxAmountHasValue")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal?>("TotalAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("TotalAmountHasValue")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("TotalCharacterCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("WarningsJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("DocumentId", "ExtractionVersion")
+                        .IsUnique();
+
+                    b.ToTable("InvoiceExtractionResults", (string)null);
+                });
+
             modelBuilder.Entity("DocumentProcessing.Domain.Entities.Document", b =>
                 {
                     b.Property<Guid>("Id")
@@ -43,6 +151,9 @@ namespace DocumentProcessing.Infrastructure.Migrations
                     b.Property<long>("FileSize")
                         .HasColumnType("bigint");
 
+                    b.Property<DateTime?>("LastProcessedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("OriginalFileName")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -63,6 +174,60 @@ namespace DocumentProcessing.Infrastructure.Migrations
                     b.HasIndex("Status");
 
                     b.ToTable("Documents", (string)null);
+                });
+
+            modelBuilder.Entity("DocumentProcessing.Domain.Entities.DocumentReview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ApprovedValuesJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("CorrectedValuesJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OriginalAiOutputJson")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ReviewDecision")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReviewedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("DocumentReviews", (string)null);
                 });
 
             modelBuilder.Entity("DocumentProcessing.Domain.Entities.DocumentTextExtraction", b =>
@@ -116,6 +281,91 @@ namespace DocumentProcessing.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("DocumentTextExtractions", (string)null);
+                });
+
+            modelBuilder.Entity("DocumentProcessing.Domain.Entities.ReviewAuditEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ActionType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DocumentReviewId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FieldName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("NewValue")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("OldValue")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("UserName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("DocumentReviewId");
+
+                    b.ToTable("ReviewAuditEntries", (string)null);
+                });
+
+            modelBuilder.Entity("DocumentProcessing.Application.Services.Invoice.InvoiceExtractionResultEntity", b =>
+                {
+                    b.HasOne("DocumentProcessing.Domain.Entities.Document", "Document")
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+                });
+
+            modelBuilder.Entity("DocumentProcessing.Domain.Entities.DocumentReview", b =>
+                {
+                    b.HasOne("DocumentProcessing.Domain.Entities.Document", "Document")
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+                });
+
+            modelBuilder.Entity("DocumentProcessing.Domain.Entities.ReviewAuditEntry", b =>
+                {
+                    b.HasOne("DocumentProcessing.Domain.Entities.DocumentReview", "DocumentReview")
+                        .WithMany("AuditEntries")
+                        .HasForeignKey("DocumentReviewId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DocumentReview");
+                });
+
+            modelBuilder.Entity("DocumentProcessing.Domain.Entities.DocumentReview", b =>
+                {
+                    b.Navigation("AuditEntries");
                 });
 #pragma warning restore 612, 618
         }

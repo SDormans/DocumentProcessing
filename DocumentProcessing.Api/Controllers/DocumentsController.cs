@@ -1,20 +1,32 @@
 using DocumentProcessing.Application.DTOs;
 using DocumentProcessing.Application.Services;
+using DocumentProcessing.Domain.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Net.Mime;
 
 namespace DocumentProcessing.Api.Controllers;
 
 [ApiController]
 [Route("api/documents")]
 [Produces("application/json")]
+[Authorize(Policy = "CanReviewDocuments")]
 public class DocumentsController : ControllerBase
 {
     private readonly IDocumentService _documentService;
+    private readonly IDocumentRepository _documentRepository;
+    private readonly IFileStorage _fileStorage;
     private readonly ILogger<DocumentsController> _logger;
 
-    public DocumentsController(IDocumentService documentService, ILogger<DocumentsController> logger)
+    public DocumentsController(
+        IDocumentService documentService,
+        IDocumentRepository documentRepository,
+        IFileStorage fileStorage,
+        ILogger<DocumentsController> logger)
     {
         _documentService = documentService;
+        _documentRepository = documentRepository;
+        _fileStorage = fileStorage;
         _logger = logger;
     }
 
@@ -28,6 +40,7 @@ public class DocumentsController : ControllerBase
     /// <response code="400">Validation failed.</response>
     /// <response code="500">Internal server error.</response>
     [HttpPost]
+    [AllowAnonymous]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(UploadDocumentResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
@@ -107,5 +120,40 @@ public class DocumentsController : ControllerBase
         }
 
         return Ok(document);
+    }
+
+    /// <summary>
+    /// Geeft het originele PDF-document terug via een geautoriseerd endpoint.
+    /// Bestanden zijn niet direct via onbeveiligde URL's beschikbaar.
+    /// </summary>
+    [HttpGet("{id:guid}/content")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetDocumentContent(Guid id, CancellationToken cancellationToken)
+    {
+        var document = await _documentRepository.GetByIdAsync(id, cancellationToken);
+
+        if (document == null)
+        {
+            return NotFound(new ErrorResponse
+            {
+                TraceId = HttpContext.TraceIdentifier,
+                Message = $"Document met ID {id} niet gevonden."
+            });
+        }
+
+        try
+        {
+            var stream = await _fileStorage.OpenReadAsync(document.StorageKey, cancellationToken);
+            return File(stream, MediaTypeNames.Application.Pdf, document.OriginalFileName);
+        }
+        catch (FileNotFoundException)
+        {
+            return NotFound(new ErrorResponse
+            {
+                TraceId = HttpContext.TraceIdentifier,
+                Message = $"Het PDF-bestand voor document {id} kon niet worden gevonden."
+            });
+        }
     }
 }
