@@ -2,6 +2,23 @@
 
 An ASP.NET Core and React prototype for storing invoice PDFs and reviewing extracted invoice data. The repository contains parts of an invoice-processing architecture, but it is **not yet a working end-to-end AI extraction system**. The current state and limitations are described below so that demo results are not confused with live model output.
 
+> **Project origin:** this project started as a demo for the **Accel Hackathon Paris** (commits from 21–22 October 2026). The state at the end of the hackathon is preserved as the [`hackathon-v0`](https://github.com/SDormans/DocumentProcessing/releases/tag/hackathon-v0) release and tag. Work after that point is being done deliberately in the open, as a portfolio project, and is tracked in the [changelog](CHANGELOG.md). See [Project history](#project-history).
+<!-- TODO: credit teammates here if the hackathon work was done as a team. -->
+
+## Project history
+
+| | Hackathon version (`hackathon-v0`) | Portfolio version (in progress) |
+|---|---|---|
+| Goal | Show an invoice-processing architecture in a hackathon demo | Turn the prototype into a working, measured, tested project |
+| Upload, storage, review UI | Working | Working |
+| AI extraction | Not implemented end to end | Planned: LLM extraction with schema-constrained output and deterministic validation |
+| Evaluation | Harness and 50-invoice synthetic corpus, no model results | Planned: published scorecard with accuracy, latency and cost per invoice |
+| Integration tests | Controller-level, mocked | Planned: real PostgreSQL via Testcontainers |
+| Background processing | Incomplete worker and queue | Planned: decide with an ADR whether a durable queue is justified |
+| Deployment | Local Docker Compose only | Planned: CI/CD and a hosted deployment |
+
+Everything in the right-hand column marked "Planned" is not done yet. This README will be updated as each item lands, and the sections below describe the **current** state of the repository, including its known limitations.
+
 ## What works today
 
 - Cookie-based sign-in with configurable demonstration bootstrap credentials.
