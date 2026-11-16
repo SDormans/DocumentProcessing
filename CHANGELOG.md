@@ -17,6 +17,7 @@ All notable changes to this project are documented here.
 - Testcontainers integration tests for migrations, auth and the upload → extraction → review flow.
 - CD workflow (`cd.yml`): images to GHCR, deploy to Azure Container Apps via OIDC; ADR 0002; `docs/deployment.md`.
 - Web image: the Nginx API upstream is configurable with `API_UPSTREAM` (default `http://api:8080`).
+- Project wiki in `docs/wiki/` (architecture, configuration, API, security, deployment, troubleshooting, roadmap).
 
 ### Removed
 - The stale `0001-docs-…patch` (its README/changelog content was already applied in revised form).
