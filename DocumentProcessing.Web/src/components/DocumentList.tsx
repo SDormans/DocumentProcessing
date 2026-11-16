@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { DocumentListItem } from './DocumentListItem';
+import { xsrfHeaders } from '../csrf';
 
 export const DocumentList: React.FC = () => {
   const [documents, setDocuments] = useState<DocumentSummaryDto[]>([]);
@@ -40,6 +41,7 @@ export const DocumentList: React.FC = () => {
       const response = await fetch('/api/documents', {
         method: 'POST',
         credentials: 'same-origin',
+        headers: xsrfHeaders(),
         body: formData,
       });
       if (!response.ok) {
