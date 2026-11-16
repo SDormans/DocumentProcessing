@@ -54,6 +54,17 @@ public class MigrationTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Adoption_leaves_an_uncreated_database_for_MigrateAsync_to_create()
+    {
+        await using var db = CreateContext(postgres.UncreatedDatabaseConnectionString());
+
+        (await MigrationBaseline.AdoptLegacyHistoryAsync(db, NullLogger.Instance)).Should().BeFalse();
+        await db.Database.MigrateAsync();
+
+        (await db.Database.GetAppliedMigrationsAsync()).Should().Equal(MigrationBaseline.BaselineMigrationId);
+    }
+
+    [Fact]
     public async Task Concurrent_adoption_rewrites_the_history_exactly_once()
     {
         var connectionString = await postgres.CreateDatabaseAsync();

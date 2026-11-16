@@ -37,23 +37,15 @@ public static class MigrationBaseline
     public static async Task<bool> AdoptLegacyHistoryAsync(
         AppDbContext dbContext, ILogger logger, CancellationToken cancellationToken = default)
     {
+        // Unlocked first check: also covers a database that does not exist yet, which MigrateAsync will create.
+        if (!RequiresAdoption(await dbContext.Database.GetAppliedMigrationsAsync(cancellationToken)))
+            return false;
+
         // Serialize concurrent API instances: the loser waits, then sees the baseline row and does nothing.
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         await dbContext.Database.ExecuteSqlRawAsync($"SELECT pg_advisory_xact_lock({AdoptionLockKey})", cancellationToken);
-
-        var applied = (await dbContext.Database.GetAppliedMigrationsAsync(cancellationToken)).ToList();
-        if (applied.Contains(BaselineMigrationId))
+        if (!RequiresAdoption(await dbContext.Database.GetAppliedMigrationsAsync(cancellationToken)))
             return false;
-
-        var legacy = applied.Intersect(LegacyMigrationIds).ToList();
-        if (legacy.Count == 0)
-            return false;
-
-        var missing = LegacyMigrationIds.Except(applied).ToList();
-        if (missing.Count > 0)
-            throw new InvalidOperationException(
-                $"The database is on a pre-baseline migration history that is missing {string.Join(", ", missing)}. " +
-                "Upgrade it with a release from before the migration squash first, or recreate the database.");
 
         var legacyIds = LegacyMigrationIds.ToArray();
         var productVersion = ProductInfo.GetVersion();
@@ -66,6 +58,20 @@ public static class MigrationBaseline
 
         logger.LogWarning("Replaced {Count} legacy migration history entries with baseline {Baseline}.",
             legacyIds.Length, BaselineMigrationId);
+        return true;
+    }
+
+    private static bool RequiresAdoption(IEnumerable<string> appliedMigrations)
+    {
+        var applied = appliedMigrations.ToList();
+        if (applied.Contains(BaselineMigrationId) || !applied.Intersect(LegacyMigrationIds).Any())
+            return false;
+
+        var missing = LegacyMigrationIds.Except(applied).ToList();
+        if (missing.Count > 0)
+            throw new InvalidOperationException(
+                $"The database is on a pre-baseline migration history that is missing {string.Join(", ", missing)}. " +
+                "Upgrade it with a release from before the migration squash first, or recreate the database.");
         return true;
     }
 }

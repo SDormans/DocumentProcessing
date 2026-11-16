@@ -15,6 +15,11 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     public Task DisposeAsync() => _container.DisposeAsync().AsTask();
 
+    /// <summary>Connection string for a database that has not been created.</summary>
+    public string UncreatedDatabaseConnectionString() =>
+        new NpgsqlConnectionStringBuilder(_container.GetConnectionString()) { Database = $"test_{Guid.NewGuid():N}" }
+            .ConnectionString;
+
     /// <summary>Creates an empty database and returns its connection string.</summary>
     public async Task<string> CreateDatabaseAsync()
     {
