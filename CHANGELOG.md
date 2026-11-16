@@ -17,6 +17,7 @@ All notable changes to this project are documented here.
 - Testcontainers integration tests for migrations, auth and the upload → extraction → review flow.
 
 ### Removed
+- The stale `0001-docs-…patch` (its README/changelog content was already applied in revised form).
 - Committed `DocumentProcessing.Web/node_modules` (already in `.gitignore`); the web image build now ignores the local folder via `.dockerignore`.
 
 ### Planned
