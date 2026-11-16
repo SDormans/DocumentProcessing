@@ -1,9 +1,11 @@
 # Document Processing Platform
 
-An ASP.NET Core and React prototype for storing invoice PDFs and reviewing extracted invoice data. The repository contains parts of an invoice-processing architecture, but it is **not yet a working end-to-end AI extraction system**. The current state and limitations are described below so that demo results are not confused with live model output.
+An ASP.NET Core and React platform for invoice PDFs: upload, queued background extraction (PDF text → LLM with a strict JSON schema → deterministic validation) and a human review UI.
+
+**Status:** the upload → queue → worker → extraction → review pipeline runs end to end in automated tests (Testcontainers + PostgreSQL) with the built-in fake AI provider. It has **not yet been run against a real LLM endpoint**, so there are no published accuracy numbers yet; the first scored run is milestone 2 on the [roadmap](docs/wiki/Roadmap.md). Known issues are listed in milestone 1 of the same roadmap. The sections below describe the current state, including limitations, so that demo results are not confused with live model output.
 
 > **Project origin:** this project started as a demo for the **Accel Hackathon Paris** (commits from 21–22 October 2026). The state at the end of the hackathon is preserved as the [`hackathon-v0`](https://github.com/SDormans/DocumentProcessing/releases/tag/hackathon-v0) release and tag. Work after that point is being done deliberately in the open, as a portfolio project, and is tracked in the [changelog](CHANGELOG.md). See [Project history](#project-history).
-
+<!-- TODO: credit teammates here if the hackathon work was done as a team. -->
 
 > **Documentation:** the [project wiki](docs/wiki/README.md) covers architecture, configuration, the API, security, deployment, troubleshooting and the [roadmap](docs/wiki/Roadmap.md).
 
@@ -15,7 +17,7 @@ An ASP.NET Core and React prototype for storing invoice PDFs and reviewing extra
 | Upload, storage, review UI | Working | Working |
 | AI extraction | Implemented, run by the worker | `InvoiceExtractor` extracts PDF text, calls an OpenAI-compatible Chat Completions endpoint with a strict JSON schema, then runs deterministic validation. Configured with `Ai:*`; `Ai:Provider=Fake` (default) needs no key. Uploads now create a queue command. |
 | Evaluation | Harness and 50-invoice synthetic corpus, no model results | Planned: published scorecard with accuracy, latency and cost per invoice |
-| Integration tests | Controller-level, mocked | Planned: real PostgreSQL via Testcontainers |
+| Integration tests | Controller-level, mocked | Real API host and PostgreSQL via Testcontainers: migrations, auth, upload → extraction → review |
 | Background processing | Implemented | `DocumentProcessing.Worker` claims `QueueCommands` with a lease (`FOR UPDATE SKIP LOCKED`), runs extraction and validation, stores the result and moves the document to `NeedsReview`. Retries are bounded with exponential backoff. See [ADR 0001](./docs/adr/0001-database-backed-queue.md). |
 | Deployment | Local Docker Compose only | After CI passes on `master`, `cd.yml` publishes images to GHCR and deploys them to Azure Container Apps once Azure is configured. See [deployment](./docs/deployment.md) and [ADR 0002](./docs/adr/0002-azure-container-apps.md). |
 
@@ -23,13 +25,15 @@ Everything in the right-hand column marked "Planned" is not done yet. This READM
 
 ## What works today
 
-- Cookie-based sign-in with configurable demonstration bootstrap credentials.
+- Cookie-based sign-in backed by ASP.NET Core Identity, with a configurable bootstrap account.
 - Authenticated PDF upload, document listing, metadata retrieval, and content download.
+- Each upload stages a queue command in the same transaction; the worker claims it with a lease, extracts text, calls the configured AI provider, validates the result and moves the document to `NeedsReview` (verified with the fake provider only).
 - File size, extension, supported MIME type (`application/pdf` or generic `application/octet-stream`), and `%PDF-` signature checks.
 - PostgreSQL persistence, EF Core migrations, and local or Azure Blob file storage.
 - A React review interface with correction and approve/reject API calls.
 - A deterministic, synthetic 50-invoice ground-truth corpus and a prediction scoring harness.
-- Local Docker Compose configuration for PostgreSQL, API, and web UI.
+- Testcontainers integration tests against a real PostgreSQL, and a CI workflow that builds, tests and builds all container images.
+- Local Docker Compose configuration for PostgreSQL, API, worker, and web UI.
 
 ## Architecture and current data flow
 
@@ -37,9 +41,12 @@ Everything in the right-hand column marked "Planned" is not done yet. This READM
 Browser (React / Nginx)
         │ same-origin /api requests
         ▼
-ASP.NET Core API ───── PostgreSQL (EF Core, migrations)
+ASP.NET Core API ───── PostgreSQL (EF Core, migrations, QueueCommands)
+        │                    ▲
+        │                    │ lease (FOR UPDATE SKIP LOCKED)
+        │               Worker: PDF text → LLM (strict JSON schema) → validation
         │
-        └──────────── Local PDF storage
+        └──────────── PDF storage (local or Azure Blob)
 
 Synthetic corpus ──► prediction JSONL ──► evaluation report
 ```
@@ -56,7 +63,7 @@ Synthetic corpus ──► prediction JSONL ──► evaluation report
 | `DocumentProcessing.IntegrationTests` | Tests against the real API host and a PostgreSQL container (Testcontainers): migrations, auth, upload → extraction → review. |
 | `tools/evaluation` | Synthetic dataset generator and JSONL prediction evaluator. |
 
-The API persists uploaded documents and exposes review endpoints. Although PDF text extraction, OCR, invoice validation, and provider abstractions exist, the invoice extractor methods are unimplemented, the configured fake provider does not extract invoice fields, and the real provider has no external AI client. Uploads are not queued by the API. Consequently, there is no functioning upload-to-extraction-to-review pipeline yet.
+The API persists uploaded documents, stages a queue command with each upload, and exposes review endpoints. The worker processes queued documents (see [ADR 0001](./docs/adr/0001-database-backed-queue.md)). `InvoiceExtractor` calls an OpenAI-compatible Chat Completions endpoint selected with `Ai:Provider=OpenAi`; the default `Ai:Provider=Fake` needs no key but returns empty fields. The real provider path has not been exercised against a live endpoint yet, and OCR for scanned PDFs is not wired into the worker image.
 
 ## Requirements
 
@@ -74,7 +81,7 @@ The API persists uploaded documents and exposes review endpoints. Although PDF t
 
    `.env` is ignored by Git. PostgreSQL runs as its bootstrap administrator, while the API connects with a separately provisioned, non-superuser role. Do not use these local demonstration credentials in another environment.
 
-2. Build and start the API, PostgreSQL, and web UI:
+2. Build and start the API, worker, PostgreSQL, and web UI:
 
    ```powershell
    docker compose up --build -d
@@ -101,7 +108,7 @@ The API persists uploaded documents and exposes review endpoints. Although PDF t
 
    To remove the local database and uploaded files as well, explicitly remove the named volumes with `docker compose down --volumes`. This permanently deletes the local demo data.
 
-The current demonstration ends at persisted upload with status `Uploaded`. It does **not** show a live extraction, model-produced validation, or a populated human-review record because those processing paths are not implemented. The JSONL ground truth is not an extraction result.
+With the default fake provider, the uploaded document is picked up by the worker and moves to `NeedsReview` with empty extracted fields, because the fake provider does not extract anything. Real extraction needs `Ai:Provider=OpenAi` and a key (not yet run; see the roadmap). The JSONL ground truth is not an extraction result.
 
 ### Run the API without Docker
 
@@ -215,7 +222,7 @@ Known security limitations:
 - The API does not process `X-Forwarded-For` yet, so behind the Nginx proxy every client shares one login rate-limit partition. Configure forwarded headers with known proxies before relying on per-IP limits.
 - Local file storage (the default) and a local PostgreSQL volume are suitable only for a single host; use `FileStorage:Provider=AzureBlob` (see [Document storage](#document-storage)) when the API and worker run on separate hosts or replicas.
 - The queue is at-least-once: a document whose lease expires mid-extraction is processed again, which can cost a second AI call. `QueueProcessing:LeaseDuration` must exceed the worst-case AI timeout.
-- AI prompts, schema parsing, provider retries, production secret rotation, and model-cost accounting cannot be evaluated until a real provider and extractor exist.
+- AI prompts, schema parsing, provider retries, production secret rotation, and model-cost accounting have not been evaluated against a real provider yet.
 
 ## Observability
 
