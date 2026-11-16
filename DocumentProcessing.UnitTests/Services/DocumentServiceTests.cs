@@ -14,6 +14,7 @@ public class DocumentServiceTests
 {
     private readonly Mock<IDocumentRepository> _mockRepository;
     private readonly Mock<IFileStorage> _mockFileStorage;
+    private readonly Mock<IProcessingQueue> _mockQueue = new();
     private readonly Mock<ILogger<DocumentService>> _mockLogger;
     private readonly DocumentService _service;
 
@@ -25,6 +26,7 @@ public class DocumentServiceTests
         _service = new DocumentService(
             _mockRepository.Object,
             _mockFileStorage.Object,
+            _mockQueue.Object,
             _mockLogger.Object,
             Options.Create(new DocumentServiceOptions { MaxFileSizeBytes = 10 * 1024 * 1024 }));
     }

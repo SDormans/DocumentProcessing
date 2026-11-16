@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<IDocumentReviewRepository>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddScoped<IInvoiceResultRepository>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddScoped<IQueueCommandRepository, QueueCommandRepository>();
+        services.AddScoped<IProcessingQueue, DbProcessingQueue>();
         services.AddScoped<IFileStorage, LocalFileStorage>();
         return services;
     }
@@ -64,7 +65,12 @@ public static class DependencyInjection
         services.AddScoped<IOcrProvider, TesseractOcrProvider>();
         services.AddScoped<IDocumentTextExtractionService, DocumentTextExtractionService>();
 
-        services.AddScoped<IAiProvider, FakeAiProvider>();
+        services.AddAiProvider(configuration);
+        services.AddScoped<IInvoiceValidationRule>(_ => new MissingRequiredFieldsValidationRule());
+        services.AddScoped<IInvoiceValidationRule, InvalidDateValidationRule>();
+        services.AddScoped<IInvoiceValidationRule, InvalidNumericValuesValidationRule>();
+        services.AddScoped<IInvoiceValidationRule>(_ => new InconsistentInvoiceAmountsValidationRule());
+        services.AddScoped<IInvoiceValidationRule, InconsistentInvoiceLinesValidationRule>();
         services.AddScoped<IInvoiceExtractor, InvoiceExtractor>();
         return services;
     }
