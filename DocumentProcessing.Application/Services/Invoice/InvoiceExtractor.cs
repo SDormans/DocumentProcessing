@@ -51,7 +51,22 @@ public class InvoiceExtractor : IInvoiceExtractor
         using var activity = ExtractionTelemetry.ActivitySource.StartActivity("invoice.extract");
         activity?.SetTag("document.id", documentId);
 
-        var result = await RunCoreAsync(documentId, allowCorrectionPass, cancellationToken);
+        InvoiceExtractionResult result;
+        try
+        {
+            result = await RunCoreAsync(documentId, allowCorrectionPass, cancellationToken);
+        }
+        catch (Exception ex) when (!(ex is OperationCanceledException && cancellationToken.IsCancellationRequested))
+        {
+            activity?.SetTag("extraction.success", false);
+            activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, ex.GetType().Name);
+            activity?.AddException(ex);
+            ExtractionTelemetry.Extractions.Add(1,
+                new KeyValuePair<string, object?>("success", false),
+                new KeyValuePair<string, object?>("correction_pass", false),
+                new KeyValuePair<string, object?>("error.type", ex.GetType().FullName));
+            throw;
+        }
 
         activity?.SetTag("extraction.success", result.Success);
         activity?.SetTag("extraction.version", result.ExtractionVersion);
