@@ -51,6 +51,11 @@ public class QueueCommand
         LeaseExpiresAtUtc = DateTime.UtcNow + leaseDuration;
     }
 
+    public void RenewLease(TimeSpan leaseDuration)
+    {
+        LeaseExpiresAtUtc = DateTime.UtcNow + leaseDuration;
+    }
+
     public void MarkCompleted()
     {
         Status = QueueCommandStatus.Completed;

@@ -109,34 +109,7 @@ public class DocumentReviewService : IDocumentReviewService
             return ForbiddenResponse(documentId, "U heeft geen toestemming om dit document te corrigeren.");
         }
 
-        var review = await _reviewRepository.GetByDocumentIdAsync(documentId, cancellationToken);
-        bool isNew = review == null;
-
-        if (isNew)
-        {
-            var invoiceResult = await _invoiceResultRepository.GetByDocumentIdAsync(documentId, cancellationToken);
-
-            var originalAiJson = invoiceResult != null
-                ? JsonSerializer.Serialize(new
-                {
-                    invoiceResult.SupplierName,
-                    invoiceResult.InvoiceNumber,
-                    invoiceResult.InvoiceDate,
-                    invoiceResult.DueDate,
-                    invoiceResult.Currency,
-                    invoiceResult.Subtotal,
-                    invoiceResult.TaxAmount,
-                    invoiceResult.TotalAmount,
-                    invoiceResult.Lines,
-                    invoiceResult.RawAiResponse,
-                    invoiceResult.ExtractionMethod,
-                    invoiceResult.ExtractionVersion
-                })
-                : "{}";
-
-            review = new DocumentReview(Guid.NewGuid(), documentId, originalAiJson);
-            await _reviewRepository.AddAsync(review, cancellationToken);
-        }
+        var review = await GetOrCreateReviewAsync(documentId, cancellationToken);
 
         if (request.CorrectedValues == null || request.CorrectedValues.Count == 0)
         {
@@ -201,17 +174,7 @@ public class DocumentReviewService : IDocumentReviewService
             return ForbiddenResponse(documentId, "U heeft geen toestemming om dit document goed te keuren.");
         }
 
-        var review = await _reviewRepository.GetByDocumentIdAsync(documentId, cancellationToken);
-        if (review == null)
-        {
-            return new ReviewActionResponse
-            {
-                DocumentId = documentId,
-                ReviewStatus = ReviewStatus.Pending.ToString(),
-                Success = false,
-                Message = "Geen review aanwezig voor dit document."
-            };
-        }
+        var review = await GetOrCreateReviewAsync(documentId, cancellationToken);
 
         if (review.Status == ReviewStatus.Approved || review.Status == ReviewStatus.Rejected)
         {
@@ -306,17 +269,7 @@ public class DocumentReviewService : IDocumentReviewService
             return ForbiddenResponse(documentId, "U heeft geen toestemming om dit document af te wijzen.");
         }
 
-        var review = await _reviewRepository.GetByDocumentIdAsync(documentId, cancellationToken);
-        if (review == null)
-        {
-            return new ReviewActionResponse
-            {
-                DocumentId = documentId,
-                ReviewStatus = ReviewStatus.Pending.ToString(),
-                Success = false,
-                Message = "Geen review aanwezig voor dit document."
-            };
-        }
+        var review = await GetOrCreateReviewAsync(documentId, cancellationToken);
 
         if (review.Status == ReviewStatus.Approved || review.Status == ReviewStatus.Rejected)
         {
@@ -394,6 +347,42 @@ public class DocumentReviewService : IDocumentReviewService
     public async Task<bool> CanApproveOrRejectAsync(string userId, CancellationToken cancellationToken = default)
     {
         return !string.IsNullOrEmpty(userId);
+    }
+
+    /// <summary>
+    /// Returns the document's review, creating it (staged, not saved) from the latest extraction result
+    /// so a reviewer can approve or reject without first submitting corrections.
+    /// </summary>
+    private async Task<DocumentReview> GetOrCreateReviewAsync(Guid documentId, CancellationToken cancellationToken)
+    {
+        var review = await _reviewRepository.GetByDocumentIdAsync(documentId, cancellationToken);
+        if (review != null)
+        {
+            return review;
+        }
+
+        var invoiceResult = await _invoiceResultRepository.GetByDocumentIdAsync(documentId, cancellationToken);
+        var originalAiJson = invoiceResult != null
+            ? JsonSerializer.Serialize(new
+            {
+                invoiceResult.SupplierName,
+                invoiceResult.InvoiceNumber,
+                invoiceResult.InvoiceDate,
+                invoiceResult.DueDate,
+                invoiceResult.Currency,
+                invoiceResult.Subtotal,
+                invoiceResult.TaxAmount,
+                invoiceResult.TotalAmount,
+                invoiceResult.Lines,
+                invoiceResult.RawAiResponse,
+                invoiceResult.ExtractionMethod,
+                invoiceResult.ExtractionVersion
+            })
+            : "{}";
+
+        review = new DocumentReview(Guid.NewGuid(), documentId, originalAiJson);
+        await _reviewRepository.AddAsync(review, cancellationToken);
+        return review;
     }
 
     private static ReviewActionResponse NotFoundResponse(Guid documentId, string message)

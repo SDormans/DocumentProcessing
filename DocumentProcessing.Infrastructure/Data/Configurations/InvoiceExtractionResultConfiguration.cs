@@ -15,12 +15,7 @@ namespace DocumentProcessing.Infrastructure.Data.Configurations
             builder.Property(d => d.DocumentId).IsRequired();
             builder.Property(d => d.ExtractionVersion).IsRequired();
             builder.Property(d => d.ExtractionMethod).IsRequired().HasMaxLength(50);
-            builder.Property(d => d.RawAiResponse).HasMaxLength(4000);
             builder.Property(d => d.ErrorMessage).HasMaxLength(2000);
-            builder.Property(d => d.LineItemsJson).HasMaxLength(10000);
-            builder.Property(d => d.SupplierName).HasMaxLength(200);
-            builder.Property(d => d.InvoiceNumber).HasMaxLength(100);
-            builder.Property(d => d.Currency).HasMaxLength(10);
             builder.Property(d => d.ExtractedAtUtc).IsRequired();
 
             // Invoice-level fields
@@ -36,9 +31,6 @@ namespace DocumentProcessing.Infrastructure.Data.Configurations
             builder.Property(d => d.TaxAmount).HasColumnType("decimal(18,2)");
             builder.Property(d => d.TotalAmountHasValue).IsRequired();
             builder.Property(d => d.TotalAmount).HasColumnType("decimal(18,2)");
-
-            // Warnings
-            builder.Property(d => d.WarningsJson).HasMaxLength(4000);
 
             // Indexes
             builder.HasIndex(d => new { d.DocumentId, d.ExtractionVersion }).IsUnique();

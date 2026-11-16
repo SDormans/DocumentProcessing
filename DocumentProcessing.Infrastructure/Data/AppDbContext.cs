@@ -87,7 +87,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IDocumentReposit
 
     Task IDocumentReviewRepository.UpdateAsync(DocumentReview review, CancellationToken cancellationToken)
     {
-        DocumentReviews.Update(review);
+        // A review created in this unit of work is already tracked as Added; Update() would turn it into an UPDATE.
+        if (Entry(review).State == EntityState.Detached)
+            DocumentReviews.Update(review);
         return Task.CompletedTask;
     }
 

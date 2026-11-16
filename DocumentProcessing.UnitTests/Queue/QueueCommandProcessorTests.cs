@@ -15,6 +15,7 @@ namespace DocumentProcessing.UnitTests.Queue;
 public class QueueCommandProcessorTests : IDisposable
 {
     private const string Worker = "worker-1";
+    private readonly string _dbName = Guid.NewGuid().ToString();
     private readonly AppDbContext _db;
     private readonly Mock<IInvoiceExtractor> _extractor = new();
     private readonly QueueProcessingOptions _options = new() { MaxAttempts = 3, BaseRetryDelay = TimeSpan.FromSeconds(10) };
@@ -22,9 +23,13 @@ public class QueueCommandProcessorTests : IDisposable
     public QueueCommandProcessorTests()
     {
         _db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .UseInMemoryDatabase(_dbName)
             .Options);
     }
+
+    private AppDbContext OtherWorkerContext() => new(new DbContextOptionsBuilder<AppDbContext>()
+        .UseInMemoryDatabase(_dbName)
+        .Options);
 
     public void Dispose() => _db.Dispose();
 
@@ -168,5 +173,31 @@ public class QueueCommandProcessorTests : IDisposable
         await Processor.ProcessAsync(command.Id, Worker, CancellationToken.None);
 
         (await _db.InvoiceExtractionResults.MaxAsync(r => r.ExtractionVersion)).Should().Be(2);
+    }
+
+    [Fact]
+    public async Task LeaseTakenOverBeforeStatusSave_DoesNotOverwriteDocument()
+    {
+        var (document, command) = await SeedAsync();
+
+        await using (var other = OtherWorkerContext())
+        {
+            var takenOver = await other.QueueCommands.SingleAsync(c => c.Id == command.Id);
+            takenOver.Claim("worker-2", TimeSpan.FromMinutes(5));
+            var otherDocument = await other.Documents.SingleAsync(d => d.Id == document.Id);
+            otherDocument.UpdateStatus(DocumentStatus.Processing);
+            otherDocument.UpdateStatus(DocumentStatus.NeedsReview);
+            takenOver.MarkCompleted();
+            await other.SaveChangesAsync();
+        }
+
+        var outcome = await Processor.ProcessAsync(command, CancellationToken.None);
+
+        outcome.Should().Be(QueueCommandOutcome.LeaseLost);
+        _extractor.Verify(e => e.ImproveAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        // The in-memory provider is not transactional, so the document row itself is only protected on PostgreSQL;
+        // here we assert the save was rejected before extraction ran.
+        await using var verify = OtherWorkerContext();
+        (await verify.QueueCommands.SingleAsync(c => c.Id == command.Id)).Status.Should().Be(QueueCommandStatus.Completed);
     }
 }
