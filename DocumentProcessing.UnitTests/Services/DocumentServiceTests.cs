@@ -17,6 +17,7 @@ public class DocumentServiceTests
     private readonly Mock<IProcessingQueue> _mockQueue = new();
     private readonly Mock<ILogger<DocumentService>> _mockLogger;
     private readonly DocumentService _service;
+    private readonly TestCurrentUser _currentUser = new("user-1", unrestricted: true);
 
     public DocumentServiceTests()
     {
@@ -28,7 +29,8 @@ public class DocumentServiceTests
             _mockFileStorage.Object,
             _mockQueue.Object,
             _mockLogger.Object,
-            Options.Create(new DocumentServiceOptions { MaxFileSizeBytes = 10 * 1024 * 1024 }));
+            Options.Create(new DocumentServiceOptions { MaxFileSizeBytes = 10 * 1024 * 1024 }),
+            _currentUser);
     }
 
     [Fact]

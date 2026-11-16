@@ -151,6 +151,10 @@ namespace DocumentProcessing.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("OwnerId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -164,6 +168,8 @@ namespace DocumentProcessing.Infrastructure.Migrations
                     b.HasIndex("CreatedAtUtc");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("OwnerId", "CreatedAtUtc");
 
                     b.ToTable("Documents", (string)null);
                 });

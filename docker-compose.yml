@@ -30,6 +30,12 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-documentprocessing};Username=${APP_DB_USER:-documentprocessing_app};Password=${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
       FileStorage__BasePath: /app/data/storage
+      FileStorage__Provider: ${FILE_STORAGE_PROVIDER:-Local}
+      FileStorage__AzureBlob__ConnectionString: ${AZURE_BLOB_CONNECTION_STRING:-}
+      FileStorage__AzureBlob__ServiceUri: ${AZURE_BLOB_SERVICE_URI:-}
+      FileStorage__AzureBlob__ManagedIdentityClientId: ${AZURE_BLOB_MANAGED_IDENTITY_CLIENT_ID:-}
+      FileStorage__AzureBlob__ContainerName: ${AZURE_BLOB_CONTAINER:-documents}
+      FileStorage__AzureBlob__CreateContainerIfNotExists: ${AZURE_BLOB_CREATE_CONTAINER:-false}
       DocumentService__MaxFileSizeBytes: ${MAX_FILE_SIZE_BYTES:-10485760}
       Authentication__Bootstrap__Username: ${DEMO_ADMIN_USERNAME:?Set DEMO_ADMIN_USERNAME in .env}
       Authentication__Bootstrap__Password: ${DEMO_ADMIN_PASSWORD:?Set DEMO_ADMIN_PASSWORD in .env}
@@ -58,6 +64,12 @@ services:
       DOTNET_ENVIRONMENT: Development
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-documentprocessing};Username=${APP_DB_USER:-documentprocessing_app};Password=${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
       FileStorage__BasePath: /app/data/storage
+      FileStorage__Provider: ${FILE_STORAGE_PROVIDER:-Local}
+      FileStorage__AzureBlob__ConnectionString: ${AZURE_BLOB_CONNECTION_STRING:-}
+      FileStorage__AzureBlob__ServiceUri: ${AZURE_BLOB_SERVICE_URI:-}
+      FileStorage__AzureBlob__ManagedIdentityClientId: ${AZURE_BLOB_MANAGED_IDENTITY_CLIENT_ID:-}
+      FileStorage__AzureBlob__ContainerName: ${AZURE_BLOB_CONTAINER:-documents}
+      FileStorage__AzureBlob__CreateContainerIfNotExists: ${AZURE_BLOB_CREATE_CONTAINER:-false}
       Ai__Provider: ${AI_PROVIDER:-Fake}
       Ai__Endpoint: ${AI_ENDPOINT:-https://api.openai.com/v1/}
       Ai__ApiKey: ${AI_API_KEY:-}

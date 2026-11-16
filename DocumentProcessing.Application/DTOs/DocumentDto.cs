@@ -8,6 +8,7 @@ public class DocumentDto
     public long FileSize { get; set; }
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
+    public string? OwnerId { get; set; }
 }
 
 public class UploadDocumentResponse

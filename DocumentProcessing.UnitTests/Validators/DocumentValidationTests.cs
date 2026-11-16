@@ -29,7 +29,8 @@ public class DocumentValidationTests
             _mockFileStorage.Object,
             _mockQueue.Object,
             _mockLogger.Object,
-            Options.Create(new DocumentServiceOptions { MaxFileSizeBytes = 10 * 1024 * 1024 }));
+            Options.Create(new DocumentServiceOptions { MaxFileSizeBytes = 10 * 1024 * 1024 }),
+            new DocumentProcessing.UnitTests.Services.TestCurrentUser("user-1", unrestricted: true));
     }
 
     [Fact]
@@ -204,7 +205,8 @@ public class DocumentValidationTests
             _mockFileStorage.Object,
             _mockQueue.Object,
             _mockLogger.Object,
-            Options.Create(new DocumentServiceOptions { MaxFileSizeBytes = smallLimit }));
+            Options.Create(new DocumentServiceOptions { MaxFileSizeBytes = smallLimit }),
+            new DocumentProcessing.UnitTests.Services.TestCurrentUser("user-1", unrestricted: true));
 
         // Act
         var act = () => serviceWithSmallLimit.UploadDocumentAsync(stream, "test.pdf", "application/pdf", CancellationToken.None);

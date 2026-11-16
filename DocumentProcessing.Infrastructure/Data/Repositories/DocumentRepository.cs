@@ -30,6 +30,14 @@ public class DocumentRepository : IDocumentRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Document>> GetByOwnerAsync(string ownerId, CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Documents
+            .Where(d => d.OwnerId == ownerId)
+            .OrderByDescending(d => d.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+    }
+
     public Task UpdateAsync(Document document, CancellationToken cancellationToken = default)
     {
         _dbContext.Documents.Update(document);
