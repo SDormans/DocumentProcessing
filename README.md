@@ -184,6 +184,8 @@ Implemented controls:
 - All document and review endpoints require an authenticated user; the upload endpoint is not anonymous.
 - Role policies guard review decisions and administrative account creation on the server.
 - Login uses a rate limit, consistent 401/403 cookie responses, HttpOnly cookies, SameSite=Lax, and Secure cookies outside Development.
+- Rate limits (fixed window, `429` with `Retry-After`): login 5/min per client IP, uploads 20/min per signed-in user. Both are configurable under `RateLimiting:Login` and `RateLimiting:Upload` (`PermitLimit`, `Period`).
+- Anti-forgery tokens on every cookie-authenticated `POST`/`PUT`/`PATCH`/`DELETE` (double-submit). Signing in and `GET /api/auth/me` issue a readable `XSRF-TOKEN` cookie bound to the user. The SPA sends it back in the `X-XSRF-TOKEN` header, and requests without a valid token get `400`. Only login and logout are exempt: there is no token before signing in, and JSON-only bodies without CORS already block cross-site login posts.
 - Accounts use ASP.NET Core Identity: hashed passwords, a 12-character minimum length, and a 15-minute lockout after 5 failed logins. There are no default accounts; the bootstrap account must be configured explicitly.
 - The API limits PDF size, checks extension/MIME/signature, replaces user filenames with generated internal storage keys, removes path components from displayed filenames, and keeps filesystem paths out of API DTOs and routine logs.
 - Storage key path resolution rejects traversal. Storage errors return a generic client response.
@@ -194,8 +196,8 @@ Known security limitations:
 
 - This is a single shared review workspace. It has no tenant or per-user document ownership/assignment checks; authenticated reviewers can access all documents in this database.
 - ASP.NET Core Data Protection keys (used to encrypt the auth cookie) are not yet persisted to shared storage, so sessions do not survive container replacement and cannot be shared across multiple API instances.
-- PDF signature checks are not malware scanning or full PDF validation. No malware scanner, encryption policy, retention/deletion workflow, or object-storage isolation is implemented.
-- Rate limiting currently protects login only. Upload throttling and explicit anti-forgery tokens are not implemented; SameSite cookies are not a complete replacement for a production CSRF design.
+- PDF signature checks are not malware scanning or full PDF validation. No malware scanner, encryption policy, retention/deletion workflow, or object-storage isolation is implemented. Planned follow-ups: [docs/security-follow-ups.md](docs/security-follow-ups.md).
+- The API does not process `X-Forwarded-For` yet, so behind the Nginx proxy every client shares one login rate-limit partition. Configure forwarded headers with known proxies before relying on per-IP limits.
 - Local file storage and a local PostgreSQL volume are suitable only for this single-host demo, not multi-replica production deployment.
 - The queue is at-least-once: a document whose lease expires mid-extraction is processed again, which can cost a second AI call. `QueueProcessing:LeaseDuration` must exceed the worst-case AI timeout.
 - AI prompts, schema parsing, provider retries, production secret rotation, and model-cost accounting cannot be evaluated until a real provider and extractor exist.

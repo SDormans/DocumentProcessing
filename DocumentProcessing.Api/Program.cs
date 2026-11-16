@@ -9,11 +9,12 @@ builder.Services
     .AddUserStore()
     .AddDocumentProcessing(builder.Configuration)
     .AddUploadLimits(builder.Configuration)
-    .AddApiRateLimiting()
+    .AddApiRateLimiting(builder.Configuration)
+    .AddApiAntiforgery(builder.Environment)
     .AddCookieAuthentication(builder.Environment)
     .AddAuthorizationPolicies();
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options => options.Filters.Add<ValidateAntiforgeryOnUnsafeMethodsFilter>());
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
 builder.Services.AddSwaggerGen();

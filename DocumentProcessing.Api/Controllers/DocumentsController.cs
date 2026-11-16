@@ -3,6 +3,8 @@ using DocumentProcessing.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using DocumentProcessing.Api.Extensions;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -40,9 +42,11 @@ public class DocumentsController : ControllerBase
     /// <response code="400">Validation failed.</response>
     /// <response code="500">Internal server error.</response>
     [HttpPost]
+    [EnableRateLimiting(RateLimitingSetup.UploadPolicy)]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(UploadDocumentResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> UploadDocument(
         IFormFile file,

@@ -1,6 +1,7 @@
 using DocumentProcessing.Api.Extensions;
 using DocumentProcessing.Application.DTOs;
 using DocumentProcessing.Application.Services;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -21,11 +22,13 @@ public class AuthController : ControllerBase
 {
     private readonly IUserService _userService;
     private readonly ILogger<AuthController> _logger;
+    private readonly IAntiforgery _antiforgery;
 
-    public AuthController(IUserService userService, ILogger<AuthController> logger)
+    public AuthController(IUserService userService, ILogger<AuthController> logger, IAntiforgery antiforgery)
     {
         _userService = userService;
         _logger = logger;
+        _antiforgery = antiforgery;
     }
 
     /// <summary>
@@ -33,6 +36,8 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
+    // The SPA has no token before signing in; JSON-only bodies and no CORS keep cross-site posts from reaching this.
+    [IgnoreAntiforgeryToken]
     [EnableRateLimiting(RateLimitingSetup.LoginPolicy)]
     [ProducesResponseType(typeof(UserInfoDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -69,6 +74,10 @@ public class AuthController : ControllerBase
 
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
+        // The token is bound to the user, so issue it for the identity that was just signed in.
+        HttpContext.User = principal;
+        _antiforgery.IssueRequestToken(HttpContext);
+
         _logger.LogInformation("User {UserId} signed in.", user.UserId);
 
         return Ok(user);
@@ -79,6 +88,7 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("logout")]
     [AllowAnonymous]
+    [IgnoreAntiforgeryToken]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> Logout()
     {
@@ -99,6 +109,9 @@ public class AuthController : ControllerBase
         var userName = User.FindFirst(ClaimTypes.Name)?.Value ?? string.Empty;
         var email = User.FindFirst(ClaimTypes.Email)?.Value ?? string.Empty;
         var roles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
+
+        // The SPA calls this on load, which refreshes the anti-forgery token for an existing session.
+        _antiforgery.IssueRequestToken(HttpContext);
 
         return Ok(new UserInfoDto
         {
