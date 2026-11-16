@@ -24,10 +24,8 @@ All notable changes to this project are documented here.
 - Committed `DocumentProcessing.Web/node_modules` (already in `.gitignore`); the web image build now ignores the local folder via `.dockerignore`.
 
 ### Planned
-- LLM-based invoice extraction with schema-constrained output and deterministic validation.
-- Published evaluation scorecard on the 50-invoice synthetic corpus.
-- Decision (ADR) on whether a durable processing queue is needed.
-- CI/CD and hosted deployment.
+- Published evaluation scorecard on the 50-invoice synthetic corpus (first run against a real LLM endpoint).
+- First hosted deployment to Azure Container Apps (the CD workflow exists; Azure is not provisioned yet).
 
 ## [hackathon-v0] - 2026-10-22
 
