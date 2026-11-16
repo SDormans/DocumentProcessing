@@ -213,6 +213,16 @@ Known security limitations:
 - The queue is at-least-once: a document whose lease expires mid-extraction is processed again, which can cost a second AI call. `QueueProcessing:LeaseDuration` must exceed the worst-case AI timeout.
 - AI prompts, schema parsing, provider retries, production secret rotation, and model-cost accounting cannot be evaluated until a real provider and extractor exist.
 
+## Observability
+
+The API and worker share one setup (`DocumentProcessing.Infrastructure/Observability/ObservabilityExtensions.cs`):
+
+- **Structured logs:** JSON console output (UTC timestamps, scopes, `TraceId`/`SpanId`) outside Development, plain text in Development. Override with `Logging:Console:FormatterName` (`json` or `simple`; `LOG_FORMAT` in Compose). The worker's queue logs carry `QueueCommandId`, `DocumentId` and `Attempt` scopes.
+- **OpenTelemetry:** traces, metrics and logs are exported over OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (standard `OTEL_*` variables such as `OTEL_EXPORTER_OTLP_PROTOCOL` and `OTEL_EXPORTER_OTLP_HEADERS` apply). When it is unset nothing is exported. Services report as `documentprocessing-api` and `documentprocessing-worker`.
+  - Traces: `ProcessQueueCommand` → `invoice.extract` → `invoice.text_extraction`, `invoice.llm_extraction` (with an `ai.extract` client span for the HTTP call to the LLM), `invoice.validation`; plus ASP.NET Core requests (health probes excluded), outgoing HTTP and Npgsql database commands.
+  - Metrics: `documentprocessing.pipeline.commands` / `.duration` (per queue command, by outcome), `documentprocessing.extraction.stage.duration` (by stage), `documentprocessing.extraction.results`, `ai.requests`, `ai.request.duration`, `ai.tokens.input`, `ai.tokens.output`, `ai.cost`, plus ASP.NET Core, HttpClient and .NET runtime metrics.
+- **Health:** `/health/live` returns 200 whenever the API process is serving requests and checks no dependencies (use for liveness probes). `/health/ready` returns 503 until PostgreSQL is reachable (use for readiness probes and startup ordering). Both are anonymous.
+
 ## CI
 
 GitHub Actions is configured in [`.github/workflows/ci.yml`](./.github/workflows/ci.yml). It restores/builds/tests .NET, verifies deterministic dataset generation, runs evaluator tests and the no-prediction baseline, builds the frontend, validates Compose, and builds all container images (API, worker, web). It uses no production credentials.

@@ -1,8 +1,10 @@
 using DocumentProcessing.Infrastructure;
+using DocumentProcessing.Infrastructure.Observability;
 using DocumentProcessing.Infrastructure.Queue;
 using DocumentProcessing.Worker;
 
 var builder = Host.CreateApplicationBuilder(args);
+builder.AddObservability("documentprocessing-worker");
 
 if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("DefaultConnection")))
     throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required.");
