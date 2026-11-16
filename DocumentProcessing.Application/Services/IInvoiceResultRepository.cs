@@ -4,7 +4,7 @@ namespace DocumentProcessing.Application.Services;
 
 /// <summary>
 /// Toegang tot opgeslagen factuur-extractieresultaten.
-/// Geïmplementeerd door AppDbContext (Infrastructure).
+/// Geïmplementeerd door InvoiceResultRepository (Infrastructure).
 /// </summary>
 public interface IInvoiceResultRepository
 {
