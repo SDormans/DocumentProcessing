@@ -13,15 +13,17 @@ public class DocumentReviewConfiguration : IEntityTypeConfiguration<DocumentRevi
         builder.HasKey(d => d.Id);
         builder.Property(d => d.Id).ValueGeneratedNever();
         builder.Property(d => d.DocumentId).IsRequired();
-        builder.Property(d => d.OriginalAiOutputJson).IsRequired().HasMaxLength(4000);
-        builder.Property(d => d.CorrectedValuesJson).HasMaxLength(4000);
-        builder.Property(d => d.ApprovedValuesJson).HasMaxLength(4000);
+        builder.Property(d => d.OriginalAiOutputJson).IsRequired();
         builder.Property(d => d.ReviewedBy).HasMaxLength(200);
         builder.Property(d => d.ReviewDecision).HasMaxLength(50);
         builder.Property(d => d.RejectionReason).HasMaxLength(2000);
         builder.Property(d => d.CreatedAtUtc).IsRequired();
 
-        builder.HasIndex(d => d.DocumentId);
+        // One review per document; a concurrent second insert fails instead of creating a conflicting review.
+        builder.HasIndex(d => d.DocumentId).IsUnique();
+
+        // Maps to PostgreSQL's xmin system column, so concurrent decisions on the same review conflict.
+        builder.Property<uint>("Version").IsRowVersion();
         builder.HasIndex(d => d.Status);
 
         builder.HasOne(d => d.Document)
