@@ -102,6 +102,7 @@ public static class InvoiceExtractionSchema
                 if (!root.TryGetProperty(field, out _))
                     errors.Add($"Missing required field '{field}'.");
             }
+            errors.AddRange(UnexpectedProperties(root, TopLevelFields, "response"));
             if (errors.Count > 0)
                 return InvoiceExtractionResult.FailureResult(string.Join(" ", errors), json);
 
@@ -118,13 +119,14 @@ public static class InvoiceExtractionSchema
             data.Lines = ReadLines(root.GetProperty("lines"), errors);
 
             var warnings = root.GetProperty("warnings");
-            if (warnings.ValueKind == JsonValueKind.Array)
+            if (warnings.ValueKind != JsonValueKind.Array)
+                errors.Add("Field 'warnings' must be an array.");
+            else if (warnings.EnumerateArray().Any(w => w.ValueKind != JsonValueKind.String))
+                errors.Add("Field 'warnings' must contain only strings.");
+            else
                 data.Warnings.AddRange(warnings.EnumerateArray()
-                    .Where(w => w.ValueKind == JsonValueKind.String)
                     .Select(w => w.GetString()!)
                     .Where(w => !string.IsNullOrWhiteSpace(w)));
-            else
-                errors.Add("Field 'warnings' must be an array.");
 
             if (errors.Count > 0)
                 return InvoiceExtractionResult.FailureResult(string.Join(" ", errors), json);
@@ -201,6 +203,9 @@ public static class InvoiceExtractionSchema
                 continue;
             }
 
+            errors.AddRange(UnexpectedProperties(line, LineFields, $"line {index}"));
+            if (line.GetProperty("description").ValueKind != JsonValueKind.String)
+                errors.Add($"Line {index} 'description' must be a string.");
             var description = ReadString(line, "description", errors) ?? string.Empty;
             var quantity = ReadDecimal(line, "quantity", errors);
             var unitPrice = ReadDecimal(line, "unitPrice", errors);
@@ -211,6 +216,11 @@ public static class InvoiceExtractionSchema
 
         return result;
     }
+
+    private static IEnumerable<string> UnexpectedProperties(JsonElement element, string[] allowed, string location) =>
+        element.EnumerateObject()
+            .Where(p => !allowed.Contains(p.Name))
+            .Select(p => $"Unexpected property '{p.Name}' in {location}.");
 
     private static string FormatLine(string description, decimal? quantity, decimal? unitPrice, decimal? amount)
     {

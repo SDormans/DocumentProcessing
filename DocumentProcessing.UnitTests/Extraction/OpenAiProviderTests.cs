@@ -71,6 +71,18 @@ public class OpenAiProviderTests
         handler.Request.Headers.Authorization.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData("{\"choices\":[]}")]
+    [InlineData("{\"choices\":[{\"message\":{\"content\":42}}]}")]
+    public async Task ExtractAsync_MalformedEnvelope_ReturnsFailure(string body)
+    {
+        var (provider, _) = Create(HttpStatusCode.OK, body);
+
+        var result = await provider.ExtractAsync("prompt");
+
+        result.Success.Should().BeFalse();
+    }
+
     [Fact]
     public async Task ExtractAsync_Refusal_ReturnsFailure()
     {

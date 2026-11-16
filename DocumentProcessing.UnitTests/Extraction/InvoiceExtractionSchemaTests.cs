@@ -78,6 +78,18 @@ public class InvoiceExtractionSchemaTests
         result.Warnings.Should().Contain(w => w.Contains("dueDate"));
     }
 
+    [Theory]
+    [InlineData("\"warnings\": []", "\"warnings\": [1]")]
+    [InlineData("\"warnings\": []", "\"warnings\": [], \"extra\": 1")]
+    [InlineData("\"description\": \"Consulting\"", "\"description\": null")]
+    [InlineData("\"amount\": 100 }", "\"amount\": 100, \"vat\": 21 }")]
+    public void Parse_SchemaViolations_Fail(string original, string replacement)
+    {
+        var result = InvoiceExtractionSchema.Parse(ValidJson.Replace(original, replacement));
+
+        result.Success.Should().BeFalse();
+    }
+
     [Fact]
     public void Parse_NotJson_Fails()
     {
