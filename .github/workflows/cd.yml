@@ -1,0 +1,152 @@
+name: CD
+
+# Runs after CI succeeds on master (or manually): publishes the API, worker and web images to GHCR, then rolls them
+# out to Azure Container Apps. The deploy job is skipped until the repository variables in docs/deployment.md exist.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      registry: ${{ steps.meta.outputs.registry }}
+    strategy:
+      matrix:
+        include:
+          - image: api
+            context: .
+            dockerfile: DocumentProcessing.Api/Dockerfile
+          - image: worker
+            context: .
+            dockerfile: DocumentProcessing.Worker/Dockerfile
+          - image: web
+            context: DocumentProcessing.Web
+            dockerfile: DocumentProcessing.Web/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - id: meta
+        name: Image name and tag
+        run: |
+          echo "registry=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "tag=sha-$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.registry }}/${{ matrix.image }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.registry }}/${{ matrix.image }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha || github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  # Runs are serialized, but CI runs can finish out of order: never deploy a commit that master has moved past.
+  freshness:
+    needs: publish
+    if: vars.AZURE_RESOURCE_GROUP != ''
+    runs-on: ubuntu-latest
+    outputs:
+      current: ${{ steps.check.outputs.current }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ]; then echo "current=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          master=$(gh api "repos/$GITHUB_REPOSITORY/commits/master" --jq .sha)
+          if [ "$master" = "$HEAD_SHA" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping deploy of $HEAD_SHA: master is at $master, which deploys in its own run."
+          fi
+
+  deploy:
+    needs: [publish, freshness]
+    if: needs.freshness.outputs.current == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.smoke.outputs.url }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      API_APP: ${{ vars.AZURE_CONTAINERAPP_API || 'documentprocessing-api' }}
+      WORKER_APP: ${{ vars.AZURE_CONTAINERAPP_WORKER || 'documentprocessing-worker' }}
+      WEB_APP: ${{ vars.AZURE_CONTAINERAPP_WEB || 'documentprocessing-web' }}
+      IMAGE_PREFIX: ${{ needs.publish.outputs.registry }}
+      TAG: ${{ needs.publish.outputs.tag }}
+    steps:
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # The API applies migrations on startup, so it goes first; the worker and web follow once it is healthy.
+      - name: Deploy API
+        run: az containerapp update -g "$RESOURCE_GROUP" -n "$API_APP" --image "$IMAGE_PREFIX/api:$TAG" --output none
+
+      - name: Wait for API readiness
+        run: |
+          revision=$(az containerapp show -g "$RESOURCE_GROUP" -n "$API_APP" --query properties.latestRevisionName -o tsv)
+          for _ in $(seq 1 60); do
+            health=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$API_APP" --revision "$revision" \
+              --query properties.healthState -o tsv)
+            running=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$API_APP" --revision "$revision" \
+              --query properties.runningState -o tsv)
+            echo "$revision: health=$health running=$running"
+            if [ "$health" = Healthy ]; then exit 0; fi
+            if [ "$health" = Unhealthy ] || [ "$running" = Failed ] || [ "$running" = Degraded ]; then exit 1; fi
+            sleep 10
+          done
+          echo "Timed out waiting for $revision" && exit 1
+
+      - name: Deploy worker
+        run: az containerapp update -g "$RESOURCE_GROUP" -n "$WORKER_APP" --image "$IMAGE_PREFIX/worker:$TAG" --output none
+
+      - name: Deploy web
+        run: az containerapp update -g "$RESOURCE_GROUP" -n "$WEB_APP" --image "$IMAGE_PREFIX/web:$TAG" --output none
+
+      - id: smoke
+        name: Smoke test through the public web app
+        run: |
+          fqdn=$(az containerapp show -g "$RESOURCE_GROUP" -n "$WEB_APP" --query properties.configuration.ingress.fqdn -o tsv)
+          echo "url=https://$fqdn" >> "$GITHUB_OUTPUT"
+          curl --fail --silent --show-error --retry 10 --retry-delay 6 --retry-all-errors "https://$fqdn/health/ready"
+          curl --fail --silent --show-error --output /dev/null "https://$fqdn/"

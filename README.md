@@ -15,7 +15,7 @@ An ASP.NET Core and React prototype for storing invoice PDFs and reviewing extra
 | Evaluation | Harness and 50-invoice synthetic corpus, no model results | Planned: published scorecard with accuracy, latency and cost per invoice |
 | Integration tests | Controller-level, mocked | Planned: real PostgreSQL via Testcontainers |
 | Background processing | Implemented | `DocumentProcessing.Worker` claims `QueueCommands` with a lease (`FOR UPDATE SKIP LOCKED`), runs extraction and validation, stores the result and moves the document to `NeedsReview`. Retries are bounded with exponential backoff. See [ADR 0001](./docs/adr/0001-database-backed-queue.md). |
-| Deployment | Local Docker Compose only | Planned: CI/CD and a hosted deployment |
+| Deployment | Local Docker Compose only | After CI passes on `master`, `cd.yml` publishes images to GHCR and deploys them to Azure Container Apps once Azure is configured. See [deployment](./docs/deployment.md) and [ADR 0002](./docs/adr/0002-azure-container-apps.md). |
 
 Everything in the right-hand column marked "Planned" is not done yet. This README will be updated as each item lands, and the sections below describe the **current** state of the repository, including its known limitations.
 
@@ -228,6 +228,8 @@ The API and worker share one setup (`DocumentProcessing.Infrastructure/Observabi
 ## CI
 
 GitHub Actions is configured in [`.github/workflows/ci.yml`](./.github/workflows/ci.yml). It restores/builds/tests .NET, verifies deterministic dataset generation, runs evaluator tests and the no-prediction baseline, builds the frontend, validates Compose, and builds all container images (API, worker, web). It uses no production credentials.
+
+[`.github/workflows/cd.yml`](./.github/workflows/cd.yml) runs after CI succeeds on a push to `master` (or manually): it pushes the API, worker and web images to `ghcr.io/sdormans/documentprocessing/*` tagged with the commit SHA, then deploys them to Azure Container Apps. The deploy job is skipped until the `AZURE_*` repository variables exist; setup and rollback are in [docs/deployment.md](./docs/deployment.md).
 
 ## Troubleshooting
 
