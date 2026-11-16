@@ -16,6 +16,9 @@ All notable changes to this project are documented here.
 - Migration history squashed into a single `InitialBaseline`; existing databases are re-pointed to it on startup.
 - Testcontainers integration tests for migrations, auth and the upload → extraction → review flow.
 
+### Removed
+- Committed `DocumentProcessing.Web/node_modules` (already in `.gitignore`); the web image build now ignores the local folder via `.dockerignore`.
+
 ### Planned
 - LLM-based invoice extraction with schema-constrained output and deterministic validation.
 - Published evaluation scorecard on the 50-invoice synthetic corpus.
