@@ -302,6 +302,14 @@ namespace DocumentProcessing.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<DateTime?>("LeaseExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LeaseOwner")
+                        .IsConcurrencyToken()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<DateTime>("NextAttemptAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -310,7 +318,12 @@ namespace DocumentProcessing.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DocumentId");
+                    b.HasIndex("DocumentId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_QueueCommands_DocumentId_Active")
+                        .HasFilter("\"Status\" IN (0, 1)");
+
+                    b.HasIndex("Status", "NextAttemptAtUtc");
 
                     b.ToTable("QueueCommands", (string)null);
                 });

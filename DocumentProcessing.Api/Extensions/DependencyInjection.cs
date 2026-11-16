@@ -1,8 +1,7 @@
 using DocumentProcessing.Application.Services;
-using DocumentProcessing.Application.Services.Invoice;
 using DocumentProcessing.Application.Services.TextExtraction;
 using DocumentProcessing.Domain.Interfaces;
-using DocumentProcessing.Infrastructure.Ai;
+using DocumentProcessing.Infrastructure;
 using DocumentProcessing.Infrastructure.Data;
 using DocumentProcessing.Infrastructure.Identity;
 using DocumentProcessing.Infrastructure.Ocr;
@@ -58,20 +57,12 @@ public static class DependencyInjection
 
         services.AddScoped<IDocumentService, DocumentService>();
         services.AddScoped<IDocumentReviewService, DocumentReviewService>();
-        services.AddScoped<ValidationService>();
 
-        services.AddScoped<IDocumentTextExtractor, PdfPigTextExtractor>();
         services.AddScoped<ITextExtractionDetector, TextExtractionDetector>();
         services.AddScoped<IOcrProvider, TesseractOcrProvider>();
         services.AddScoped<IDocumentTextExtractionService, DocumentTextExtractionService>();
 
-        services.AddAiProvider(configuration);
-        services.AddScoped<IInvoiceValidationRule>(_ => new MissingRequiredFieldsValidationRule());
-        services.AddScoped<IInvoiceValidationRule, InvalidDateValidationRule>();
-        services.AddScoped<IInvoiceValidationRule, InvalidNumericValuesValidationRule>();
-        services.AddScoped<IInvoiceValidationRule>(_ => new InconsistentInvoiceAmountsValidationRule());
-        services.AddScoped<IInvoiceValidationRule, InconsistentInvoiceLinesValidationRule>();
-        services.AddScoped<IInvoiceExtractor, InvoiceExtractor>();
+        services.AddInvoiceExtraction(configuration);
         return services;
     }
 

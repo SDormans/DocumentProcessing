@@ -64,7 +64,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IDocumentReposit
         Guid documentId,
         CancellationToken cancellationToken = default)
     {
-        return InvoiceExtractionResults.FirstOrDefaultAsync(r => r.DocumentId == documentId, cancellationToken);
+        return InvoiceExtractionResults
+            .Where(r => r.DocumentId == documentId)
+            .OrderByDescending(r => r.ExtractionVersion)
+            .FirstOrDefaultAsync(cancellationToken);
     }
     // IDocumentReviewRepository implementation (explicit interface to avoid signature clash with IDocumentRepository)
     Task<DocumentReview?> IDocumentReviewRepository.GetByDocumentIdAsync(Guid documentId, CancellationToken cancellationToken)
