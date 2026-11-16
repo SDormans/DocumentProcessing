@@ -1,6 +1,7 @@
 using DocumentProcessing.Application.DTOs;
 using DocumentProcessing.Application.Exceptions;
 using DocumentProcessing.Domain.Entities;
+using DocumentProcessing.Domain.Enums;
 using DocumentProcessing.Domain.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -11,17 +12,20 @@ public class DocumentService : IDocumentService
 {
     private readonly IDocumentRepository _documentRepository;
     private readonly IFileStorage _fileStorage;
+    private readonly IProcessingQueue _processingQueue;
     private readonly ILogger<DocumentService> _logger;
     private readonly DocumentServiceOptions _options;
 
     public DocumentService(
         IDocumentRepository documentRepository,
         IFileStorage fileStorage,
+        IProcessingQueue processingQueue,
         ILogger<DocumentService> logger,
         IOptions<DocumentServiceOptions> options)
     {
         _documentRepository = documentRepository;
         _fileStorage = fileStorage;
+        _processingQueue = processingQueue;
         _logger = logger;
         _options = options.Value;
     }
@@ -65,7 +69,9 @@ public class DocumentService : IDocumentService
 
         try
         {
+            document.UpdateStatus(DocumentStatus.Queued);
             await _documentRepository.AddAsync(document, cancellationToken);
+            await _processingQueue.EnqueueAsync(document.Id, cancellationToken);
             await _documentRepository.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
@@ -82,7 +88,7 @@ public class DocumentService : IDocumentService
             throw new StorageException("Failed to save document metadata.", ex);
         }
 
-        _logger.LogInformation("Document {DocumentId} uploaded successfully.", document.Id);
+        _logger.LogInformation("Document {DocumentId} uploaded and queued for processing.", document.Id);
 
         return new UploadDocumentResponse
         {

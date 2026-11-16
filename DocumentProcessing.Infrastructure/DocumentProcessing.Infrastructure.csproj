@@ -8,7 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="DocumentProcessing.UnitTests" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.0.0" />
     <PackageReference Include="PDFsharp-MigraDoc" Version="6.0.0" />
     <PackageReference Include="SkiaSharp" Version="3.116.0" />
     <PackageReference Include="Tesseract" Version="5.2.0" />

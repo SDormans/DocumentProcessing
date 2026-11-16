@@ -50,6 +50,7 @@ builder.Services.AddDbContext<AppDbContext>((sp, options) =>
 builder.Services.AddScoped<IDocumentRepository>(
     sp => sp.GetRequiredService<AppDbContext>());
 builder.Services.AddScoped<IQueueCommandRepository, QueueCommandRepository>();
+builder.Services.AddScoped<IProcessingQueue, DbProcessingQueue>();
 builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
 builder.Services.AddScoped<ValidationService>();
@@ -71,7 +72,12 @@ builder.Services.AddScoped<IOcrProvider, TesseractOcrProvider>();
 builder.Services.AddScoped<IDocumentTextExtractionService, DocumentTextExtractionService>();
 
 // AI providers
-builder.Services.AddScoped<IAiProvider, FakeAiProvider>();
+builder.Services.AddAiProvider(builder.Configuration);
+builder.Services.AddScoped<IInvoiceValidationRule>(_ => new MissingRequiredFieldsValidationRule());
+builder.Services.AddScoped<IInvoiceValidationRule, InvalidDateValidationRule>();
+builder.Services.AddScoped<IInvoiceValidationRule, InvalidNumericValuesValidationRule>();
+builder.Services.AddScoped<IInvoiceValidationRule>(_ => new InconsistentInvoiceAmountsValidationRule());
+builder.Services.AddScoped<IInvoiceValidationRule, InconsistentInvoiceLinesValidationRule>();
 builder.Services.AddScoped<IInvoiceExtractor, InvoiceExtractor>();
 
 // DocumentService options from configuration
