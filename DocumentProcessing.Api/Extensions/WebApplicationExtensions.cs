@@ -21,6 +21,8 @@ public static class WebApplicationExtensions
     {
         using var scope = app.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await MigrationBaseline.AdoptLegacyHistoryAsync(
+            dbContext, scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(MigrationBaseline)));
         await dbContext.Database.MigrateAsync();
         await IdentitySeeder.SeedAsync(scope.ServiceProvider, app.Configuration);
     }
