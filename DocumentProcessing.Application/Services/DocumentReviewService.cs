@@ -21,6 +21,7 @@ public class DocumentReviewService : IDocumentReviewService
     private readonly IInvoiceResultRepository _invoiceResultRepository;
     private readonly ValidationService _validationService;
     private readonly ILogger<DocumentReviewService> _logger;
+    private readonly ICurrentUser _currentUser;
 
     public DocumentReviewService(
         IDocumentRepository documentRepository,
@@ -28,8 +29,10 @@ public class DocumentReviewService : IDocumentReviewService
         IFileStorage fileStorage,
         IInvoiceResultRepository invoiceResultRepository,
         ValidationService validationService,
-        ILogger<DocumentReviewService> logger)
+        ILogger<DocumentReviewService> logger,
+        ICurrentUser currentUser)
     {
+        _currentUser = currentUser;
         _documentRepository = documentRepository;
         _reviewRepository = reviewRepository;
         _fileStorage = fileStorage;
@@ -42,7 +45,7 @@ public class DocumentReviewService : IDocumentReviewService
         Guid documentId,
         CancellationToken cancellationToken = default)
     {
-        var document = await _documentRepository.GetByIdAsync(documentId, cancellationToken);
+        var document = await GetAccessibleDocumentAsync(documentId, cancellationToken);
         if (document == null)
         {
             return null;
@@ -97,7 +100,7 @@ public class DocumentReviewService : IDocumentReviewService
         string userName,
         CancellationToken cancellationToken = default)
     {
-        var document = await _documentRepository.GetByIdAsync(documentId, cancellationToken);
+        var document = await GetAccessibleDocumentAsync(documentId, cancellationToken);
         if (document == null)
         {
             return NotFoundResponse(documentId, "Document niet gevonden.");
@@ -189,7 +192,7 @@ public class DocumentReviewService : IDocumentReviewService
         string userName,
         CancellationToken cancellationToken = default)
     {
-        var document = await _documentRepository.GetByIdAsync(documentId, cancellationToken);
+        var document = await GetAccessibleDocumentAsync(documentId, cancellationToken);
         if (document == null)
         {
             return NotFoundResponse(documentId, "Document niet gevonden.");
@@ -294,7 +297,7 @@ public class DocumentReviewService : IDocumentReviewService
             };
         }
 
-        var document = await _documentRepository.GetByIdAsync(documentId, cancellationToken);
+        var document = await GetAccessibleDocumentAsync(documentId, cancellationToken);
         if (document == null)
         {
             return NotFoundResponse(documentId, "Document niet gevonden.");
@@ -366,7 +369,8 @@ public class DocumentReviewService : IDocumentReviewService
         Guid documentId,
         CancellationToken cancellationToken = default)
     {
-        var review = await _reviewRepository.GetByDocumentIdAsync(documentId, cancellationToken);
+        var document = await GetAccessibleDocumentAsync(documentId, cancellationToken);
+        var review = document == null ? null : await _reviewRepository.GetByDocumentIdAsync(documentId, cancellationToken);
         if (review == null)
         {
             return new List<ReviewAuditEntryDto>();
@@ -394,6 +398,20 @@ public class DocumentReviewService : IDocumentReviewService
     public async Task<bool> CanApproveOrRejectAsync(string userId, CancellationToken cancellationToken = default)
     {
         return !string.IsNullOrEmpty(userId);
+    }
+
+    /// <summary>
+    /// Returns null both for missing documents and for documents the user may not see, so ids of other users' documents are not disclosed.
+    /// </summary>
+    private async Task<Document?> GetAccessibleDocumentAsync(Guid documentId, CancellationToken cancellationToken)
+    {
+        var document = await _documentRepository.GetByIdAsync(documentId, cancellationToken);
+        if (document != null && !_currentUser.CanAccess(document))
+        {
+            _logger.LogWarning("User {UserId} was denied review access to document {DocumentId}.", _currentUser.UserId, documentId);
+            return null;
+        }
+        return document;
     }
 
     private static ReviewActionResponse NotFoundResponse(Guid documentId, string message)

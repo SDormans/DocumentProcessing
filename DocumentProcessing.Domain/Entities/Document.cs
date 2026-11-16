@@ -27,8 +27,10 @@ public class Document
         string contentHash,
         string storageKey,
         DocumentStatus status,
-        DateTime createdAtUtc)
+        DateTime createdAtUtc,
+        string? ownerId = null)
     {
+        OwnerId = ownerId;
         Id = id;
         OriginalFileName = originalFileName;
         ContentType = contentType;
@@ -49,6 +51,12 @@ public class Document
     public DateTime CreatedAtUtc { get; private set; }
 
     /// <summary>
+    /// Identity user id of the uploader. Null for documents created before ownership was tracked;
+    /// those are only visible to users with unrestricted document access.
+    /// </summary>
+    public string? OwnerId { get; private set; }
+
+    /// <summary>
     /// Timestamp of the latest processing or review of this document in UTC.
     /// </summary>
     public DateTime? LastProcessedAtUtc { get; private set; }
@@ -58,7 +66,8 @@ public class Document
         string contentType,
         long fileSize,
         string contentHash,
-        string storageKey)
+        string storageKey,
+        string? ownerId = null)
     {
         return new Document(
             Guid.NewGuid(),
@@ -68,7 +77,8 @@ public class Document
             contentHash,
             storageKey,
             DocumentStatus.Uploaded,
-            DateTime.UtcNow);
+            DateTime.UtcNow,
+            ownerId);
     }
 
     public void UpdateStatus(DocumentStatus newStatus)

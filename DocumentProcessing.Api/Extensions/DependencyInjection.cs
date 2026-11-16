@@ -55,6 +55,10 @@ public static class DependencyInjection
         services.Configure<DocumentServiceOptions>(configuration.GetSection("DocumentService"));
         services.Configure<TextExtractionOptions>(configuration.GetSection("TextExtraction"));
 
+        services.Configure<DocumentAccessOptions>(configuration.GetSection(DocumentAccessOptions.SectionName));
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUser, HttpCurrentUser>();
+
         services.AddScoped<IDocumentService, DocumentService>();
         services.AddScoped<IDocumentReviewService, DocumentReviewService>();
 
