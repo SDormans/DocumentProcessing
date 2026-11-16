@@ -10,6 +10,8 @@ All notable changes to this project are documented here.
 - This changelog.
 - Invoice extraction: `InvoiceExtractor` with strict JSON-schema LLM output (`InvoiceExtractionSchema`), OpenAI-compatible `OpenAiProvider` (retries, timeouts, token/cost metrics), selected by `Ai:Provider`.
 - Uploads stage a `QueueCommand` in the same transaction as the document.
+- Background worker: leased queue claims (`FOR UPDATE SKIP LOCKED`), bounded retries with exponential backoff, idempotent redelivery, persisted extraction results; `worker` service in Compose.
+- `docs/adr/` with ADR 0001 (keep the PostgreSQL-backed queue).
 
 ### Planned
 - LLM-based invoice extraction with schema-constrained output and deterministic validation.

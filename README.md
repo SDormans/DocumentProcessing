@@ -11,10 +11,10 @@ An ASP.NET Core and React prototype for storing invoice PDFs and reviewing extra
 |---|---|---|
 | Goal | Show an invoice-processing architecture in a hackathon demo | Turn the prototype into a working, measured, tested project |
 | Upload, storage, review UI | Working | Working |
-| AI extraction | Implemented, not yet run by the worker | `InvoiceExtractor` extracts PDF text, calls an OpenAI-compatible Chat Completions endpoint with a strict JSON schema, then runs deterministic validation. Configured with `Ai:*`; `Ai:Provider=Fake` (default) needs no key. Uploads now create a queue command. |
+| AI extraction | Implemented, run by the worker | `InvoiceExtractor` extracts PDF text, calls an OpenAI-compatible Chat Completions endpoint with a strict JSON schema, then runs deterministic validation. Configured with `Ai:*`; `Ai:Provider=Fake` (default) needs no key. Uploads now create a queue command. |
 | Evaluation | Harness and 50-invoice synthetic corpus, no model results | Planned: published scorecard with accuracy, latency and cost per invoice |
 | Integration tests | Controller-level, mocked | Planned: real PostgreSQL via Testcontainers |
-| Background processing | Incomplete worker and queue | Planned: decide with an ADR whether a durable queue is justified |
+| Background processing | Implemented | `DocumentProcessing.Worker` claims `QueueCommands` with a lease (`FOR UPDATE SKIP LOCKED`), runs extraction and validation, stores the result and moves the document to `NeedsReview`. Retries are bounded with exponential backoff. See [ADR 0001](./docs/adr/0001-database-backed-queue.md). |
 | Deployment | Local Docker Compose only | Planned: CI/CD and a hosted deployment |
 
 Everything in the right-hand column marked "Planned" is not done yet. This README will be updated as each item lands, and the sections below describe the **current** state of the repository, including its known limitations.
@@ -48,7 +48,7 @@ Synthetic corpus ──► prediction JSONL ──► evaluation report
 | `DocumentProcessing.Application` | Upload/review services, DTOs, validation rules, and extraction contracts. |
 | `DocumentProcessing.Infrastructure` | EF Core/PostgreSQL, local storage, PDF/OCR adapters, and AI provider implementations. |
 | `DocumentProcessing.Api` | ASP.NET Core endpoints, cookie authentication, authorization, and error responses. |
-| `DocumentProcessing.Worker` | Intended background worker; currently incomplete and not started by Compose. |
+| `DocumentProcessing.Worker` | Background worker that processes queued documents; started by Compose as `worker`. Tuned with `QueueProcessing:*`. |
 | `DocumentProcessing.Web` | React/TypeScript interface, served by Nginx in Compose. |
 | `DocumentProcessing.UnitTests` | Unit tests for application services and validation. |
 | `DocumentProcessing.IntegrationTests` | Controller-level tests; these currently use mocks and do not exercise a live PostgreSQL-backed HTTP server. |
@@ -197,12 +197,12 @@ Known security limitations:
 - PDF signature checks are not malware scanning or full PDF validation. No malware scanner, encryption policy, retention/deletion workflow, or object-storage isolation is implemented.
 - Rate limiting currently protects login only. Upload throttling and explicit anti-forgery tokens are not implemented; SameSite cookies are not a complete replacement for a production CSRF design.
 - Local file storage and a local PostgreSQL volume are suitable only for this single-host demo, not multi-replica production deployment.
-- The background worker and durable queue are incomplete; do not enqueue production documents. Retry bounds, claim/lease semantics, and idempotent extraction are not ready.
+- The queue is at-least-once: a document whose lease expires mid-extraction is processed again, which can cost a second AI call. `QueueProcessing:LeaseDuration` must exceed the worst-case AI timeout.
 - AI prompts, schema parsing, provider retries, production secret rotation, and model-cost accounting cannot be evaluated until a real provider and extractor exist.
 
 ## CI
 
-GitHub Actions is configured in [`.github/workflows/ci.yml`](./.github/workflows/ci.yml). It restores/builds/tests .NET, verifies deterministic dataset generation, runs evaluator tests and the no-prediction baseline, builds the frontend, validates Compose, and builds both container images. It uses no production credentials.
+GitHub Actions is configured in [`.github/workflows/ci.yml`](./.github/workflows/ci.yml). It restores/builds/tests .NET, verifies deterministic dataset generation, runs evaluator tests and the no-prediction baseline, builds the frontend, validates Compose, and builds all container images (API, worker, web). It uses no production credentials.
 
 ## Troubleshooting
 
@@ -211,6 +211,6 @@ GitHub Actions is configured in [`.github/workflows/ci.yml`](./.github/workflows
 - **API container exits during startup:** inspect `docker compose logs api`. The API requires the PostgreSQL health check and complete bootstrap username/password settings.
 - **Login fails for the bootstrap user:** the account is only created when it does not exist yet. If the database volume already contains the user, the existing password still applies; reset the volume (`docker compose down -v`) to re-seed in a demo environment.
 - **PDF upload returns 413/415/400:** check the configured upload limit, `.pdf` extension, supported MIME type, and actual PDF signature.
-- **The document remains `Uploaded`:** expected in this revision; queue submission and invoice extraction are not connected.
+- **The document remains `Queued`:** check that the `worker` service is running (`docker compose logs worker`). Failed commands record `LastErrorCategory` in `QueueCommands`.
 - **Evaluation accuracy is `null`:** no prediction JSONL was supplied. This is intentional; the tool does not fabricate predictions or metrics.
-- **OCR/AI failures:** no end-to-end OCR-to-AI worker is currently available. Tesseract/PDF adapters and AI provider contracts alone do not mean the extraction pipeline is operational.
+- **OCR/AI failures:** documents without extractable text, and AI responses that are rejected, refused or violate the schema, fail without a retry. Timeouts and HTTP errors are retried up to `QueueProcessing:MaxAttempts`.
