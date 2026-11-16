@@ -38,8 +38,14 @@ public static class IdentitySeeder
         if (!AppRoles.All.Contains(role))
             throw new InvalidOperationException($"Bootstrap role '{role}' is not supported.");
 
-        if (await userManager.FindByNameAsync(username) is not null)
+        var existing = await userManager.FindByNameAsync(username);
+        if (existing is not null)
+        {
+            // Repairs a previous startup that was interrupted between user creation and role assignment.
+            if (!await userManager.IsInRoleAsync(existing, role))
+                await EnsureSucceeded(await userManager.AddToRoleAsync(existing, role), "assign bootstrap role");
             return;
+        }
 
         var user = new ApplicationUser
         {

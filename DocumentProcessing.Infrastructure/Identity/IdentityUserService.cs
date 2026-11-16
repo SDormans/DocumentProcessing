@@ -9,6 +9,10 @@ namespace DocumentProcessing.Infrastructure.Identity;
 /// </summary>
 public class IdentityUserService : IUserService
 {
+    private static readonly ApplicationUser TimingDummyUser = new() { UserName = "timing-dummy" };
+    private static readonly Lazy<string> TimingDummyHash = new(() =>
+        new PasswordHasher<ApplicationUser>().HashPassword(TimingDummyUser, Guid.NewGuid().ToString()));
+
     private readonly UserManager<ApplicationUser> _userManager;
 
     public IdentityUserService(UserManager<ApplicationUser> userManager)
@@ -18,9 +22,14 @@ public class IdentityUserService : IUserService
 
     public async Task<UserInfoDto?> ValidateUserAsync(string username, string password, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var user = await _userManager.FindByNameAsync(username);
         if (user is null)
+        {
+            // Hash anyway so response time does not reveal whether the username exists.
+            _userManager.PasswordHasher.VerifyHashedPassword(TimingDummyUser, TimingDummyHash.Value, password);
             return null;
+        }
 
         if (_userManager.SupportsUserLockout && await _userManager.IsLockedOutAsync(user))
             return null;
@@ -40,23 +49,27 @@ public class IdentityUserService : IUserService
 
     public async Task<UserInfoDto?> GetUserByIdAsync(string userId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var user = await _userManager.FindByIdAsync(userId);
         return user is null ? null : await ToDtoAsync(user);
     }
 
     public async Task<bool> UserExistsAsync(string username, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         return await _userManager.FindByNameAsync(username) is not null;
     }
 
     public async Task<UserInfoDto> CreateUserAsync(string username, string password, string email, string role, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (!AppRoles.All.Contains(role))
             throw new ArgumentException($"Unsupported role '{role}'.", nameof(role));
 
         if (await UserExistsAsync(username, cancellationToken))
             throw new InvalidOperationException("The user already exists.");
 
+        cancellationToken.ThrowIfCancellationRequested();
         var user = new ApplicationUser { UserName = username, Email = email };
         var result = await _userManager.CreateAsync(user, password);
         if (!result.Succeeded)

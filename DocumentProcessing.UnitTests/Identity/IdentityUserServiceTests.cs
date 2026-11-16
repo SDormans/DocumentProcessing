@@ -78,6 +78,33 @@ public class IdentityUserServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Seed_ExistingBootstrapUserWithoutRole_AssignsRole()
+    {
+        await SeedAsync();
+        var userManager = _scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        await userManager.CreateAsync(new ApplicationUser { UserName = "boot", Email = "boot@example.invalid" }, "A-long-demo-password-2026");
+
+        await SeedAsync(new()
+        {
+            ["Authentication:Bootstrap:Username"] = "boot",
+            ["Authentication:Bootstrap:Password"] = "A-long-demo-password-2026"
+        });
+
+        (await Service.ValidateUserAsync("boot", "A-long-demo-password-2026"))!.Role.Should().Be("Admin");
+    }
+
+    [Fact]
+    public async Task CreateUser_CanceledToken_DoesNotCreateUser()
+    {
+        await SeedAsync();
+
+        var act = () => Service.CreateUserAsync("reviewer1", "Reviewer-password-1", "r@example.invalid", "Reviewer", new CancellationToken(true));
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        (await Service.UserExistsAsync("reviewer1")).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task CreateUser_PersistsUserWithRole()
     {
         await SeedAsync();
