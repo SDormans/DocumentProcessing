@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { xsrfHeaders } from '../csrf';
 
 interface ReviewState {
   fieldName: string;
@@ -64,7 +65,7 @@ export const useDocumentReview = (documentId: string) => {
     const response = await fetch(`/api/documents/${documentId}/review/corrections`, {
       method: 'PUT',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...xsrfHeaders() },
       body: JSON.stringify({ correctedValues: { [fieldName]: correctedValue } }),
     });
     if (!response.ok) throw new Error('Could not save the correction.');
@@ -81,7 +82,7 @@ export const useDocumentReview = (documentId: string) => {
     const response = await fetch(`/api/documents/${documentId}/review/approve`, {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...xsrfHeaders() },
       body: JSON.stringify({}),
     });
     if (!response.ok) throw new Error('Could not approve the document.');
@@ -96,7 +97,7 @@ export const useDocumentReview = (documentId: string) => {
     const response = await fetch(`/api/documents/${documentId}/review/reject`, {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...xsrfHeaders() },
       body: JSON.stringify(request),
     });
     if (!response.ok) throw new Error('Could not reject the document.');
