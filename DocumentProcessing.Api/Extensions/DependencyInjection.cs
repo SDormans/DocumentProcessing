@@ -1,38 +1,18 @@
 using DocumentProcessing.Application.Services;
-using DocumentProcessing.Application.Services.Invoice;
 using DocumentProcessing.Application.Services.TextExtraction;
 using DocumentProcessing.Domain.Interfaces;
-using DocumentProcessing.Infrastructure.Ai;
+using DocumentProcessing.Infrastructure;
 using DocumentProcessing.Infrastructure.Data;
 using DocumentProcessing.Infrastructure.Identity;
 using DocumentProcessing.Infrastructure.Ocr;
-using DocumentProcessing.Infrastructure.Queue;
-using DocumentProcessing.Infrastructure.Storage;
 using DocumentProcessing.Infrastructure.TextExtraction;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 
 namespace DocumentProcessing.Api.Extensions;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddPersistence(this IServiceCollection services, IConfiguration configuration)
-    {
-        services.AddDbContext<AppDbContext>(options =>
-            options.UseNpgsql(
-                configuration.GetConnectionString("DefaultConnection"),
-                npgsql => npgsql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName)));
-
-        services.AddScoped<IDocumentRepository>(sp => sp.GetRequiredService<AppDbContext>());
-        services.AddScoped<IDocumentReviewRepository>(sp => sp.GetRequiredService<AppDbContext>());
-        services.AddScoped<IInvoiceResultRepository>(sp => sp.GetRequiredService<AppDbContext>());
-        services.AddScoped<IQueueCommandRepository, QueueCommandRepository>();
-        services.AddScoped<IProcessingQueue, DbProcessingQueue>();
-        services.AddScoped<IFileStorage, LocalFileStorage>();
-        return services;
-    }
-
     public static IServiceCollection AddUserStore(this IServiceCollection services)
     {
         services
@@ -58,20 +38,12 @@ public static class DependencyInjection
 
         services.AddScoped<IDocumentService, DocumentService>();
         services.AddScoped<IDocumentReviewService, DocumentReviewService>();
-        services.AddScoped<ValidationService>();
 
-        services.AddScoped<IDocumentTextExtractor, PdfPigTextExtractor>();
         services.AddScoped<ITextExtractionDetector, TextExtractionDetector>();
         services.AddScoped<IOcrProvider, TesseractOcrProvider>();
         services.AddScoped<IDocumentTextExtractionService, DocumentTextExtractionService>();
 
-        services.AddAiProvider(configuration);
-        services.AddScoped<IInvoiceValidationRule>(_ => new MissingRequiredFieldsValidationRule());
-        services.AddScoped<IInvoiceValidationRule, InvalidDateValidationRule>();
-        services.AddScoped<IInvoiceValidationRule, InvalidNumericValuesValidationRule>();
-        services.AddScoped<IInvoiceValidationRule>(_ => new InconsistentInvoiceAmountsValidationRule());
-        services.AddScoped<IInvoiceValidationRule, InconsistentInvoiceLinesValidationRule>();
-        services.AddScoped<IInvoiceExtractor, InvoiceExtractor>();
+        services.AddInvoiceExtraction(configuration);
         return services;
     }
 

@@ -12,6 +12,7 @@ All notable changes to this project are documented here.
 - Uploads stage a `QueueCommand` in the same transaction as the document.
 - Background worker: leased queue claims (`FOR UPDATE SKIP LOCKED`), bounded retries with exponential backoff, idempotent redelivery, persisted extraction results; `worker` service in Compose.
 - `docs/adr/` with ADR 0001 (keep the PostgreSQL-backed queue).
+- Concrete EF Core repositories (`DocumentRepository`, `DocumentReviewRepository`, `InvoiceResultRepository`) replace `AppDbContext` implementing the repository interfaces; shared `AddPersistence` registration for API and worker.
 
 ### Planned
 - LLM-based invoice extraction with schema-constrained output and deterministic validation.

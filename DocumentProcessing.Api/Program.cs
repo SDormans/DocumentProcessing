@@ -1,5 +1,6 @@
 using DocumentProcessing.Api.Extensions;
 using DocumentProcessing.Api.Middleware;
+using DocumentProcessing.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
