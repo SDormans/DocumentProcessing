@@ -24,7 +24,7 @@ Everything in the right-hand column marked "Planned" is not done yet. This READM
 - Cookie-based sign-in with configurable demonstration bootstrap credentials.
 - Authenticated PDF upload, document listing, metadata retrieval, and content download.
 - File size, extension, supported MIME type (`application/pdf` or generic `application/octet-stream`), and `%PDF-` signature checks.
-- PostgreSQL persistence, EF Core migrations, and local file storage.
+- PostgreSQL persistence, EF Core migrations, and local or Azure Blob file storage.
 - A React review interface with correction and approve/reject API calls.
 - A deterministic, synthetic 50-invoice ground-truth corpus and a prediction scoring harness.
 - Local Docker Compose configuration for PostgreSQL, API, and web UI.
@@ -46,7 +46,7 @@ Synthetic corpus ──► prediction JSONL ──► evaluation report
 | --- | --- |
 | `DocumentProcessing.Domain` | Document/review entities, states, and repository contracts. |
 | `DocumentProcessing.Application` | Upload/review services, DTOs, validation rules, and extraction contracts. |
-| `DocumentProcessing.Infrastructure` | EF Core/PostgreSQL, local storage, PDF/OCR adapters, and AI provider implementations. |
+| `DocumentProcessing.Infrastructure` | EF Core/PostgreSQL, local and Azure Blob storage, PDF/OCR adapters, and AI provider implementations. |
 | `DocumentProcessing.Api` | ASP.NET Core endpoints, cookie authentication, authorization, and error responses. |
 | `DocumentProcessing.Worker` | Background worker that processes queued documents; started by Compose as `worker`. Tuned with `QueueProcessing:*`. |
 | `DocumentProcessing.Web` | React/TypeScript interface, served by Nginx in Compose. |
@@ -115,6 +115,17 @@ dotnet run --project DocumentProcessing.Api
 ```
 
 Users are stored with ASP.NET Core Identity in PostgreSQL (`AspNetUsers`/`AspNetRoles` tables). On startup the API applies migrations, ensures the `Admin` and `Reviewer` roles exist, and creates the bootstrap user only if it does not exist yet; changing the bootstrap variables later does not modify an existing account. Additional users are created by an administrator through `POST /api/auth/register`.
+
+### Document storage
+
+`FileStorage:Provider` selects where uploaded PDFs are stored; the API and worker must use the same setting.
+
+| Provider | Use | Settings |
+|---|---|---|
+| `Local` (default) | Development, single host | `FileStorage:BasePath` |
+| `AzureBlob` | Production, multiple hosts | `FileStorage:AzureBlob:*` |
+
+For Azure Blob Storage, set either `ConnectionString` (for example Azurite: `UseDevelopmentStorage=true`) or `ServiceUri` (`https://<account>.blob.core.windows.net`). With `ServiceUri` the app authenticates through `DefaultAzureCredential`: a managed identity in Azure (set `ManagedIdentityClientId` for a user-assigned one) or your `az login` locally. That identity needs the **Storage Blob Data Contributor** role on the container. Provision the container (`ContainerName`, default `documents`) up front, or set `CreateContainerIfNotExists=true` for local testing. Blobs are written once and never overwritten; the storage key is the blob name.
 
 ### Database migration impact
 
@@ -194,9 +205,9 @@ Known security limitations:
 
 - Documents are owned by the user who uploaded them (`Documents.OwnerId`). Reviewers only see, download and review their own documents; roles in `DocumentAccess:UnrestrictedRoles` (default `Admin`) see all documents. Documents uploaded before ownership was introduced have no owner and are visible only to unrestricted roles. There is no tenant/team model or document assignment yet.
 - ASP.NET Core Data Protection keys (used to encrypt the auth cookie) are not yet persisted to shared storage, so sessions do not survive container replacement and cannot be shared across multiple API instances.
-- PDF signature checks are not malware scanning or full PDF validation. No malware scanner, encryption policy, retention/deletion workflow, or object-storage isolation is implemented.
+- PDF signature checks are not malware scanning or full PDF validation. No malware scanner, encryption policy, or retention/deletion workflow is implemented.
 - Rate limiting currently protects login only. Upload throttling and explicit anti-forgery tokens are not implemented; SameSite cookies are not a complete replacement for a production CSRF design.
-- Local file storage and a local PostgreSQL volume are suitable only for this single-host demo, not multi-replica production deployment.
+- Local file storage (the default) and a local PostgreSQL volume are suitable only for a single host; use `FileStorage:Provider=AzureBlob` (see [Document storage](#document-storage)) when the API and worker run on separate hosts or replicas.
 - The queue is at-least-once: a document whose lease expires mid-extraction is processed again, which can cost a second AI call. `QueueProcessing:LeaseDuration` must exceed the worst-case AI timeout.
 - AI prompts, schema parsing, provider retries, production secret rotation, and model-cost accounting cannot be evaluated until a real provider and extractor exist.
 
