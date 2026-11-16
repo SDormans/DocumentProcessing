@@ -15,6 +15,7 @@ public class DocumentValidationTests
 {
     private readonly Mock<IDocumentRepository> _mockRepository;
     private readonly Mock<IFileStorage> _mockFileStorage;
+    private readonly Mock<IProcessingQueue> _mockQueue = new();
     private readonly Mock<ILogger<DocumentService>> _mockLogger;
     private readonly DocumentService _service;
 
@@ -26,6 +27,7 @@ public class DocumentValidationTests
         _service = new DocumentService(
             _mockRepository.Object,
             _mockFileStorage.Object,
+            _mockQueue.Object,
             _mockLogger.Object,
             Options.Create(new DocumentServiceOptions { MaxFileSizeBytes = 10 * 1024 * 1024 }));
     }
@@ -94,7 +96,8 @@ public class DocumentValidationTests
 
         // Assert
         response.Id.Should().NotBe(Guid.Empty);
-        response.Status.Should().Be("Uploaded");
+        response.Status.Should().Be("Queued");
+        _mockQueue.Verify(q => q.EnqueueAsync(response.Id, It.IsAny<CancellationToken>()), Times.Once);
         _mockFileStorage.Verify(s => s.StoreAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Once);
         _mockRepository.Verify(r => r.AddAsync(It.IsAny<DocumentProcessing.Domain.Entities.Document>(), It.IsAny<CancellationToken>()),
@@ -154,7 +157,7 @@ public class DocumentValidationTests
             "application/octet-stream",
             CancellationToken.None);
 
-        result.Status.Should().Be("Uploaded");
+        result.Status.Should().Be("Queued");
     }
 
     [Fact]
@@ -199,6 +202,7 @@ public class DocumentValidationTests
         var serviceWithSmallLimit = new DocumentService(
             _mockRepository.Object,
             _mockFileStorage.Object,
+            _mockQueue.Object,
             _mockLogger.Object,
             Options.Create(new DocumentServiceOptions { MaxFileSizeBytes = smallLimit }));
 

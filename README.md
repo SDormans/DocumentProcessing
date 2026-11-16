@@ -11,7 +11,7 @@ An ASP.NET Core and React prototype for storing invoice PDFs and reviewing extra
 |---|---|---|
 | Goal | Show an invoice-processing architecture in a hackathon demo | Turn the prototype into a working, measured, tested project |
 | Upload, storage, review UI | Working | Working |
-| AI extraction | Not implemented end to end | Planned: LLM extraction with schema-constrained output and deterministic validation |
+| AI extraction | Implemented, not yet run by the worker | `InvoiceExtractor` extracts PDF text, calls an OpenAI-compatible Chat Completions endpoint with a strict JSON schema, then runs deterministic validation. Configured with `Ai:*`; `Ai:Provider=Fake` (default) needs no key. Uploads now create a queue command. |
 | Evaluation | Harness and 50-invoice synthetic corpus, no model results | Planned: published scorecard with accuracy, latency and cost per invoice |
 | Integration tests | Controller-level, mocked | Planned: real PostgreSQL via Testcontainers |
 | Background processing | Incomplete worker and queue | Planned: decide with an ADR whether a durable queue is justified |
