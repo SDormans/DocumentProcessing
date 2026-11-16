@@ -1,3 +1,4 @@
+using DocumentProcessing.Api.Extensions;
 using DocumentProcessing.Application.DTOs;
 using DocumentProcessing.Application.Services;
 using Microsoft.AspNetCore.Authentication;
@@ -32,7 +33,7 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
-    [EnableRateLimiting("login")]
+    [EnableRateLimiting(RateLimitingSetup.LoginPolicy)]
     [ProducesResponseType(typeof(UserInfoDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
