@@ -20,6 +20,7 @@ All notable changes to this project are documented here.
 
 ### Removed
 - The stale `0001-docs-…patch` (its README/changelog content was already applied in revised form).
+- Committed `DocumentProcessing.Web/node_modules` (already in `.gitignore`); the web image build now ignores the local folder via `.dockerignore`.
 
 ### Planned
 - LLM-based invoice extraction with schema-constrained output and deterministic validation.
