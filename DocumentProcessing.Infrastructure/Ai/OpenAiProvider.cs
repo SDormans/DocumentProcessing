@@ -57,8 +57,9 @@ public class OpenAiProvider : IAiProvider
             var completion = JsonNode.Parse(body);
             RecordUsage(completion, activity);
 
-            var message = completion?["choices"]?[0]?["message"];
-            var finishReason = completion?["choices"]?[0]?["finish_reason"]?.GetValue<string>();
+            var choice = completion?["choices"] is JsonArray { Count: > 0 } choices ? choices[0] : null;
+            var message = choice?["message"];
+            var finishReason = choice?["finish_reason"]?.GetValue<string>();
             var refusal = message?["refusal"]?.GetValue<string>();
             if (!string.IsNullOrWhiteSpace(refusal))
             {
@@ -83,7 +84,7 @@ public class OpenAiProvider : IAiProvider
             outcome = result.Success ? "success" : "schema_violation";
             return result;
         }
-        catch (JsonException ex)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
         {
             outcome = "invalid_response";
             _logger.LogError(ex, "AI provider returned an unparseable response.");
