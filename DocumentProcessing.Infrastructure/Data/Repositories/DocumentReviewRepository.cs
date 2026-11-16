@@ -1,6 +1,8 @@
 using DocumentProcessing.Domain.Entities;
 using DocumentProcessing.Domain.Interfaces;
+using DocumentProcessing.Domain.Exceptions;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace DocumentProcessing.Infrastructure.Data.Repositories;
 
@@ -52,8 +54,19 @@ public class DocumentReviewRepository : IDocumentReviewRepository
             .ToListAsync(cancellationToken);
     }
 
-    public Task SaveChangesAsync(CancellationToken cancellationToken = default)
+    public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        return _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new ConcurrencyConflictException("The review was changed by another request.", ex);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            throw new ConcurrencyConflictException("A review for this document was created by another request.", ex);
+        }
     }
 }

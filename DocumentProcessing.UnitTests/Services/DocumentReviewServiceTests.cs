@@ -3,6 +3,7 @@ using DocumentProcessing.Application.Services;
 using DocumentProcessing.Application.Services.Invoice;
 using DocumentProcessing.Domain.Entities;
 using DocumentProcessing.Domain.Enums;
+using DocumentProcessing.Domain.Exceptions;
 using DocumentProcessing.Domain.Interfaces;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -59,5 +60,50 @@ public class DocumentReviewServiceTests
         response.Success.Should().BeTrue();
         _added!.Status.Should().Be(ReviewStatus.Rejected);
         _document.Status.Should().Be(DocumentStatus.Failed);
+    }
+
+    [Theory]
+    [InlineData(DocumentStatus.Queued)]
+    [InlineData(DocumentStatus.Processing)]
+    [InlineData(DocumentStatus.Failed)]
+    [InlineData(DocumentStatus.Completed)]
+    public async Task Decisions_OnDocumentNotAwaitingReview_AreRefusedWithoutSaving(DocumentStatus status)
+    {
+        var document = new Document(Guid.NewGuid(), "invoice.pdf", "application/pdf", 10, "hash", "key", status, DateTime.UtcNow);
+        _documents.Setup(r => r.GetByIdAsync(document.Id, It.IsAny<CancellationToken>())).ReturnsAsync(document);
+
+        (await Service.ApproveAsync(document.Id, new ApproveRequest(), "user-1", "reviewer")).Success.Should().BeFalse();
+        (await Service.RejectAsync(document.Id, new RejectRequest { Reason = "x" }, "user-1", "reviewer")).Success.Should().BeFalse();
+        (await Service.SubmitCorrectionsAsync(document.Id, new SubmitCorrectionsRequest { CorrectedValues = new Dictionary<string, string> { ["SupplierName"] = "x" } }, "user-1", "reviewer"))
+            .Success.Should().BeFalse();
+
+        _added.Should().BeNull();
+        document.Status.Should().Be(status);
+        _reviews.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Approve_WithoutExtractionResult_IsRefused()
+    {
+        _results.Setup(r => r.GetByDocumentIdAsync(_document.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((InvoiceExtractionResultEntity?)null);
+
+        var response = await Service.ApproveAsync(_document.Id, new ApproveRequest(), "user-1", "reviewer");
+
+        response.Success.Should().BeFalse();
+        _document.Status.Should().Be(DocumentStatus.NeedsReview);
+        _reviews.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Approve_LosingConcurrentDecision_ReturnsFailure()
+    {
+        _reviews.Setup(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ConcurrencyConflictException("conflict", new Exception()));
+
+        var response = await Service.ApproveAsync(_document.Id, new ApproveRequest(), "user-1", "reviewer");
+
+        response.Success.Should().BeFalse();
+        _documents.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 }
