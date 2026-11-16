@@ -5,3 +5,4 @@ Short records of significant decisions, in the [Michael Nygard format](https://c
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-database-backed-queue.md) | Keep the PostgreSQL-backed processing queue | Accepted |
+| [0002](0002-azure-container-apps.md) | Deploy container images to Azure Container Apps | Accepted |

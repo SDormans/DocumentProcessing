@@ -15,6 +15,8 @@ All notable changes to this project are documented here.
 - Concrete EF Core repositories (`DocumentRepository`, `DocumentReviewRepository`, `InvoiceResultRepository`) replace `AppDbContext` implementing the repository interfaces; shared `AddPersistence` registration for API and worker.
 - Migration history squashed into a single `InitialBaseline`; existing databases are re-pointed to it on startup.
 - Testcontainers integration tests for migrations, auth and the upload → extraction → review flow.
+- CD workflow (`cd.yml`): images to GHCR, deploy to Azure Container Apps via OIDC; ADR 0002; `docs/deployment.md`.
+- Web image: the Nginx API upstream is configurable with `API_UPSTREAM` (default `http://api:8080`).
 
 ### Planned
 - LLM-based invoice extraction with schema-constrained output and deterministic validation.
