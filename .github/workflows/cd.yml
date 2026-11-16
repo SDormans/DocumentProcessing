@@ -71,9 +71,32 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 
-  deploy:
+  # Runs are serialized, but CI runs can finish out of order: never deploy a commit that master has moved past.
+  freshness:
     needs: publish
     if: vars.AZURE_RESOURCE_GROUP != ''
+    runs-on: ubuntu-latest
+    outputs:
+      current: ${{ steps.check.outputs.current }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ]; then echo "current=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          master=$(gh api "repos/$GITHUB_REPOSITORY/commits/master" --jq .sha)
+          if [ "$master" = "$HEAD_SHA" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping deploy of $HEAD_SHA: master is at $master, which deploys in its own run."
+          fi
+
+  deploy:
+    needs: [publish, freshness]
+    if: needs.freshness.outputs.current == 'true'
     runs-on: ubuntu-latest
     environment:
       name: production
