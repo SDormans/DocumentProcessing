@@ -28,8 +28,7 @@ namespace DocumentProcessing.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("Currency")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                        .HasColumnType("text");
 
                     b.Property<bool>("CurrencyHasValue")
                         .HasColumnType("boolean");
@@ -65,15 +64,13 @@ namespace DocumentProcessing.Infrastructure.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<string>("InvoiceNumber")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasColumnType("text");
 
                     b.Property<bool>("InvoiceNumberHasValue")
                         .HasColumnType("boolean");
 
                     b.Property<string>("LineItemsJson")
-                        .HasMaxLength(10000)
-                        .HasColumnType("character varying(10000)");
+                        .HasColumnType("text");
 
                     b.Property<string>("Lines")
                         .HasColumnType("text");
@@ -85,8 +82,7 @@ namespace DocumentProcessing.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("RawAiResponse")
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
+                        .HasColumnType("text");
 
                     b.Property<decimal?>("Subtotal")
                         .HasColumnType("decimal(18,2)");
@@ -95,8 +91,7 @@ namespace DocumentProcessing.Infrastructure.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<string>("SupplierName")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("text");
 
                     b.Property<bool>("SupplierNameHasValue")
                         .HasColumnType("boolean");
@@ -117,8 +112,7 @@ namespace DocumentProcessing.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("WarningsJson")
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -186,12 +180,10 @@ namespace DocumentProcessing.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("ApprovedValuesJson")
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
+                        .HasColumnType("text");
 
                     b.Property<string>("CorrectedValuesJson")
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -201,8 +193,7 @@ namespace DocumentProcessing.Infrastructure.Migrations
 
                     b.Property<string>("OriginalAiOutputJson")
                         .IsRequired()
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
+                        .HasColumnType("text");
 
                     b.Property<string>("RejectionReason")
                         .HasMaxLength(2000)
@@ -225,9 +216,16 @@ namespace DocumentProcessing.Infrastructure.Migrations
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("DocumentId");
+                    b.HasIndex("DocumentId")
+                        .IsUnique();
 
                     b.HasIndex("Status");
 
