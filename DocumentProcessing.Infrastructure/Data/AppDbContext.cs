@@ -3,11 +3,13 @@ using DocumentProcessing.Domain.Entities;
 using DocumentProcessing.Domain.Interfaces;
 using DocumentProcessing.Application.Services.Invoice;
 using DocumentProcessing.Infrastructure.Data.Configurations;
+using DocumentProcessing.Infrastructure.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace DocumentProcessing.Infrastructure.Data;
 
-public class AppDbContext : DbContext, IDocumentRepository, IInvoiceResultRepository, IDocumentReviewRepository
+public class AppDbContext : IdentityDbContext<ApplicationUser>, IDocumentRepository, IInvoiceResultRepository, IDocumentReviewRepository
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
@@ -16,7 +18,7 @@ public class AppDbContext : DbContext, IDocumentRepository, IInvoiceResultReposi
     public DbSet<InvoiceExtractionResultEntity> InvoiceExtractionResults => Set<InvoiceExtractionResultEntity>();
     public DbSet<DocumentReview> DocumentReviews => Set<DocumentReview>();
     public DbSet<ReviewAuditEntry> ReviewAuditEntries => Set<ReviewAuditEntry>();
-public DbSet<QueueCommand> QueueCommands => Set<QueueCommand>();
+    public DbSet<QueueCommand> QueueCommands => Set<QueueCommand>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

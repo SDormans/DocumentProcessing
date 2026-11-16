@@ -114,7 +114,7 @@ $env:Authentication__Bootstrap__Email = "demo-admin@example.invalid"
 dotnet run --project DocumentProcessing.Api
 ```
 
-The in-memory demonstration account is lost when the API restarts. The API deliberately refuses to start in a non-Development environment until a persistent production identity provider replaces this demonstration store.
+Users are stored with ASP.NET Core Identity in PostgreSQL (`AspNetUsers`/`AspNetRoles` tables). On startup the API applies migrations, ensures the `Admin` and `Reviewer` roles exist, and creates the bootstrap user only if it does not exist yet; changing the bootstrap variables later does not modify an existing account. Additional users are created by an administrator through `POST /api/auth/register`.
 
 ### Database migration impact
 
@@ -184,7 +184,7 @@ Implemented controls:
 - All document and review endpoints require an authenticated user; the upload endpoint is not anonymous.
 - Role policies guard review decisions and administrative account creation on the server.
 - Login uses a rate limit, consistent 401/403 cookie responses, HttpOnly cookies, SameSite=Lax, and Secure cookies outside Development.
-- The in-memory demonstration store has no default accounts, uses per-user salted PBKDF2 password hashes with constant-time comparison, and requires explicitly configured bootstrap credentials.
+- Accounts use ASP.NET Core Identity: hashed passwords, a 12-character minimum length, and a 15-minute lockout after 5 failed logins. There are no default accounts; the bootstrap account must be configured explicitly.
 - The API limits PDF size, checks extension/MIME/signature, replaces user filenames with generated internal storage keys, removes path components from displayed filenames, and keeps filesystem paths out of API DTOs and routine logs.
 - Storage key path resolution rejects traversal. Storage errors return a generic client response.
 - Compose binds database, API, and web ports to loopback. Database credentials and bootstrap credentials come from an ignored `.env`, not the Compose file.
@@ -193,7 +193,7 @@ Implemented controls:
 Known security limitations:
 
 - This is a single shared review workspace. It has no tenant or per-user document ownership/assignment checks; authenticated reviewers can access all documents in this database.
-- The user store is in-memory and the API intentionally blocks non-Development startup. Do not deploy this authentication implementation.
+- ASP.NET Core Data Protection keys (used to encrypt the auth cookie) are not yet persisted to shared storage, so sessions do not survive container replacement and cannot be shared across multiple API instances.
 - PDF signature checks are not malware scanning or full PDF validation. No malware scanner, encryption policy, retention/deletion workflow, or object-storage isolation is implemented.
 - Rate limiting currently protects login only. Upload throttling and explicit anti-forgery tokens are not implemented; SameSite cookies are not a complete replacement for a production CSRF design.
 - Local file storage and a local PostgreSQL volume are suitable only for this single-host demo, not multi-replica production deployment.
@@ -209,7 +209,7 @@ GitHub Actions is configured in [`.github/workflows/ci.yml`](./.github/workflows
 - **Compose asks for environment variables:** copy `.env.example` to `.env` and replace the placeholder passwords.
 - **Database readiness stays unhealthy:** inspect `docker compose logs postgres`; confirm the configured database/user/password and ensure local port 5432 is available.
 - **API container exits during startup:** inspect `docker compose logs api`. The API requires the PostgreSQL health check and complete bootstrap username/password settings.
-- **Login is unavailable after restarting the API:** the demonstration user store is in memory; confirm the bootstrap variables are set and restart the API.
+- **Login fails for the bootstrap user:** the account is only created when it does not exist yet. If the database volume already contains the user, the existing password still applies; reset the volume (`docker compose down -v`) to re-seed in a demo environment.
 - **PDF upload returns 413/415/400:** check the configured upload limit, `.pdf` extension, supported MIME type, and actual PDF signature.
 - **The document remains `Uploaded`:** expected in this revision; queue submission and invoice extraction are not connected.
 - **Evaluation accuracy is `null`:** no prediction JSONL was supplied. This is intentional; the tool does not fabricate predictions or metrics.
