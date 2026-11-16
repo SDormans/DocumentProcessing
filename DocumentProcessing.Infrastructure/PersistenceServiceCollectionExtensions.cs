@@ -28,7 +28,7 @@ public static class PersistenceServiceCollectionExtensions
         services.AddScoped<IInvoiceResultRepository, InvoiceResultRepository>();
         services.AddScoped<IQueueCommandRepository, QueueCommandRepository>();
         services.AddScoped<IProcessingQueue, DbProcessingQueue>();
-        services.AddScoped<IFileStorage, LocalFileStorage>();
+        services.AddFileStorage(configuration);
         return services;
     }
 }
