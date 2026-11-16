@@ -192,7 +192,7 @@ Implemented controls:
 
 Known security limitations:
 
-- This is a single shared review workspace. It has no tenant or per-user document ownership/assignment checks; authenticated reviewers can access all documents in this database.
+- Documents are owned by the user who uploaded them (`Documents.OwnerId`). Reviewers only see, download and review their own documents; roles in `DocumentAccess:UnrestrictedRoles` (default `Admin`) see all documents. Documents uploaded before ownership was introduced have no owner and are visible only to unrestricted roles. There is no tenant/team model or document assignment yet.
 - ASP.NET Core Data Protection keys (used to encrypt the auth cookie) are not yet persisted to shared storage, so sessions do not survive container replacement and cannot be shared across multiple API instances.
 - PDF signature checks are not malware scanning or full PDF validation. No malware scanner, encryption policy, retention/deletion workflow, or object-storage isolation is implemented.
 - Rate limiting currently protects login only. Upload throttling and explicit anti-forgery tokens are not implemented; SameSite cookies are not a complete replacement for a production CSRF design.

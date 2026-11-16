@@ -18,8 +18,10 @@ public class DocumentConfiguration : IEntityTypeConfiguration<Document>
         builder.Property(d => d.Status).IsRequired();
         builder.Property(d => d.CreatedAtUtc).IsRequired();
         builder.Property(d => d.FileSize).IsRequired();
+        builder.Property(d => d.OwnerId).HasMaxLength(450);
 
         builder.HasIndex(d => d.CreatedAtUtc);
         builder.HasIndex(d => d.Status);
+        builder.HasIndex(d => new { d.OwnerId, d.CreatedAtUtc });
     }
 }

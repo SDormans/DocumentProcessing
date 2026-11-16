@@ -37,7 +37,8 @@ public class DocumentReviewServiceTests
         Mock.Of<IFileStorage>(),
         _results.Object,
         new ValidationService(Array.Empty<IInvoiceValidationRule>()),
-        NullLogger<DocumentReviewService>.Instance);
+        NullLogger<DocumentReviewService>.Instance,
+        Mock.Of<ICurrentUser>(u => u.HasUnrestrictedDocumentAccess));
 
     [Fact]
     public async Task Approve_WithoutPriorCorrections_CreatesReviewFromExtraction()

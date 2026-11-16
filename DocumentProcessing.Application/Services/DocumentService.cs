@@ -15,14 +15,17 @@ public class DocumentService : IDocumentService
     private readonly IProcessingQueue _processingQueue;
     private readonly ILogger<DocumentService> _logger;
     private readonly DocumentServiceOptions _options;
+    private readonly ICurrentUser _currentUser;
 
     public DocumentService(
         IDocumentRepository documentRepository,
         IFileStorage fileStorage,
         IProcessingQueue processingQueue,
         ILogger<DocumentService> logger,
-        IOptions<DocumentServiceOptions> options)
+        IOptions<DocumentServiceOptions> options,
+        ICurrentUser currentUser)
     {
+        _currentUser = currentUser;
         _documentRepository = documentRepository;
         _fileStorage = fileStorage;
         _processingQueue = processingQueue;
@@ -65,7 +68,8 @@ public class DocumentService : IDocumentService
             contentType: contentType,
             fileSize: fileStream.Length,
             contentHash: contentHash,
-            storageKey: storedStorageKey);
+            storageKey: storedStorageKey,
+            ownerId: _currentUser.UserId);
 
         try
         {
@@ -100,19 +104,26 @@ public class DocumentService : IDocumentService
 
     public async Task<DocumentDto?> GetDocumentAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var document = await _documentRepository.GetByIdAsync(id, cancellationToken);
+        var document = await GetAccessibleDocumentAsync(id, cancellationToken);
         return document == null ? null : MapToDto(document);
     }
 
     public async Task<IReadOnlyList<DocumentDto>> GetDocumentsAsync(CancellationToken cancellationToken = default)
     {
-        var documents = await _documentRepository.GetAllAsync(cancellationToken);
+        IReadOnlyList<Document> documents;
+        if (_currentUser.HasUnrestrictedDocumentAccess)
+            documents = await _documentRepository.GetAllAsync(cancellationToken);
+        else if (string.IsNullOrEmpty(_currentUser.UserId))
+            documents = [];
+        else
+            documents = await _documentRepository.GetByOwnerAsync(_currentUser.UserId, cancellationToken);
+
         return documents.Select(MapToDto).ToList();
     }
 
     public async Task<DocumentFileDto?> GetDocumentFileAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var document = await _documentRepository.GetByIdAsync(id, cancellationToken);
+        var document = await GetAccessibleDocumentAsync(id, cancellationToken);
         if (document == null)
         {
             return null;
@@ -125,6 +136,20 @@ public class DocumentService : IDocumentService
             ContentType = document.ContentType,
             FileName = document.OriginalFileName
         };
+    }
+
+    /// <summary>
+    /// Returns null both for missing documents and for documents the user may not see, so ids of other users' documents are not disclosed.
+    /// </summary>
+    private async Task<Document?> GetAccessibleDocumentAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var document = await _documentRepository.GetByIdAsync(id, cancellationToken);
+        if (document != null && !_currentUser.CanAccess(document))
+        {
+            _logger.LogWarning("User {UserId} was denied access to document {DocumentId}.", _currentUser.UserId, id);
+            return null;
+        }
+        return document;
     }
 
     private static IEnumerable<string> ValidateFile(Stream fileStream, string originalFileName, string contentType, long maxFileSizeBytes)
@@ -206,7 +231,8 @@ public class DocumentService : IDocumentService
             ContentType = document.ContentType,
             FileSize = document.FileSize,
             Status = document.Status.ToString(),
-            CreatedAtUtc = document.CreatedAtUtc
+            CreatedAtUtc = document.CreatedAtUtc,
+            OwnerId = document.OwnerId
         };
     }
 }
