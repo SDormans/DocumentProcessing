@@ -20,5 +20,5 @@ public sealed class HttpCurrentUser : ICurrentUser
     public string? UserId => Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
     public bool HasUnrestrictedDocumentAccess =>
-        Principal is { } user && _options.UnrestrictedRoles.Any(user.IsInRole);
+        Principal is { } user && _options.EffectiveUnrestrictedRoles.Any(user.IsInRole);
 }

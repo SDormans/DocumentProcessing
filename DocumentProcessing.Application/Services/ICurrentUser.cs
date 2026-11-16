@@ -19,10 +19,17 @@ public class DocumentAccessOptions
 {
     public const string SectionName = "DocumentAccess";
 
+    public static readonly IReadOnlyList<string> DefaultUnrestrictedRoles = ["Admin"];
+
     /// <summary>
     /// Roles that may read and review all documents. Everyone else only sees documents they uploaded.
+    /// Empty means <see cref="DefaultUnrestrictedRoles"/>. Starts empty because configuration binding appends to an
+    /// initialized list, which would keep Admin even when configuration lists other roles.
     /// </summary>
-    public List<string> UnrestrictedRoles { get; set; } = ["Admin"];
+    public List<string> UnrestrictedRoles { get; set; } = [];
+
+    public IReadOnlyList<string> EffectiveUnrestrictedRoles =>
+        UnrestrictedRoles.Count > 0 ? UnrestrictedRoles : DefaultUnrestrictedRoles;
 }
 
 public static class DocumentAccess
