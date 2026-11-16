@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DocumentProcessing.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261116182322_UniqueReviewPerDocument")]
-    partial class UniqueReviewPerDocument
+    [Migration("20261116183700_InitialBaseline")]
+    partial class InitialBaseline
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -154,6 +154,10 @@ namespace DocumentProcessing.Infrastructure.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("OwnerId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -167,6 +171,8 @@ namespace DocumentProcessing.Infrastructure.Data.Migrations
                     b.HasIndex("CreatedAtUtc");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("OwnerId", "CreatedAtUtc");
 
                     b.ToTable("Documents", (string)null);
                 });

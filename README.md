@@ -51,7 +51,7 @@ Synthetic corpus ──► prediction JSONL ──► evaluation report
 | `DocumentProcessing.Worker` | Background worker that processes queued documents; started by Compose as `worker`. Tuned with `QueueProcessing:*`. |
 | `DocumentProcessing.Web` | React/TypeScript interface, served by Nginx in Compose. |
 | `DocumentProcessing.UnitTests` | Unit tests for application services and validation. |
-| `DocumentProcessing.IntegrationTests` | Controller-level tests; these currently use mocks and do not exercise a live PostgreSQL-backed HTTP server. |
+| `DocumentProcessing.IntegrationTests` | Tests against the real API host and a PostgreSQL container (Testcontainers): migrations, auth, upload → extraction → review. |
 | `tools/evaluation` | Synthetic dataset generator and JSONL prediction evaluator. |
 
 The API persists uploaded documents and exposes review endpoints. Although PDF text extraction, OCR, invoice validation, and provider abstractions exist, the invoice extractor methods are unimplemented, the configured fake provider does not extract invoice fields, and the real provider has no external AI client. Uploads are not queued by the API. Consequently, there is no functioning upload-to-extraction-to-review pipeline yet.
@@ -127,9 +127,11 @@ Users are stored with ASP.NET Core Identity in PostgreSQL (`AspNetUsers`/`AspNet
 
 For Azure Blob Storage, set either `ConnectionString` (for example Azurite: `UseDevelopmentStorage=true`) or `ServiceUri` (`https://<account>.blob.core.windows.net`). With `ServiceUri` the app authenticates through `DefaultAzureCredential`: a managed identity in Azure (set `ManagedIdentityClientId` for a user-assigned one) or your `az login` locally. That identity needs the **Storage Blob Data Contributor** role on the container. Provision the container (`ContainerName`, default `documents`) up front, or set `CreateContainerIfNotExists=true` for local testing. Blobs are written once and never overwritten; the storage key is the blob name.
 
-### Database migration impact
+### Database migrations
 
-The legacy `InitialCreate` migration is a no-op because the earlier `DescribeYourChanges` migration already creates its tables; this prevents fresh databases from attempting to create them twice. The added `SyncCurrentModel` migration creates the missing `QueueCommands` table and removes a redundant single-column invoice-result index already covered by a composite index. Applying it preserves existing rows. Rolling it back drops `QueueCommands` and any rows written to it; back up the database before rollback.
+The pre-release migration history was squashed into one baseline migration, `InitialBaseline` (`DocumentProcessing.Infrastructure/Data/Migrations`), which creates the full current schema, including the one-review-per-document unique index. New schema changes are added as migrations on top of it.
+
+Databases created from the old history (`DescribeYourChanges` through `UniqueReviewPerDocument`) already have exactly this schema. On startup the API detects that history and replaces its rows in `__EFMigrationsHistory` with the baseline entry, without touching any table. A database that stopped partway through the old history is refused with an error naming the missing migrations; upgrade it with a release from before the squash first, or recreate it.
 
 ## Build and test
 
@@ -145,7 +147,7 @@ npm --prefix DocumentProcessing.Web run build
 docker compose --env-file .env.example config --quiet
 ```
 
-The .NET integration-test project currently contains controller-level tests with mocks; it does not validate migrations or HTTP/database behavior against PostgreSQL. The frontend build runs strict TypeScript checks followed by a Vite production build. The Node test suite checks dataset invariants and evaluator calculations.
+The .NET integration tests need a running Docker daemon: Testcontainers starts a `postgres:16-alpine` container for the run, and each test class gets its own database. They boot the real API in-process (migrations, Identity, cookie auth, anti-forgery, ownership checks) with the fake AI provider, drain the queue with the worker's `QueueCommandProcessor`, and cover the migration baseline, sign-in and authorization, and upload → extraction → correction → approval. The frontend build runs strict TypeScript checks followed by a Vite production build. The Node test suite checks dataset invariants and evaluator calculations.
 
 ## Synthetic extraction evaluation
 
