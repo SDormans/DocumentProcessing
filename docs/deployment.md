@@ -49,7 +49,8 @@ az containerapp create -g $RG -n documentprocessing-api --environment $ENV --ima
   --secrets db="$DB" admin-password=<bootstrap-password> \
   --env-vars ConnectionStrings__DefaultConnection=secretref:db $BLOB_ENV \
     Authentication__Bootstrap__Username=<admin-user> Authentication__Bootstrap__Password=secretref:admin-password \
-    Authentication__Bootstrap__Email=<admin-email> Authentication__Bootstrap__Role=Admin
+    Authentication__Bootstrap__Email=<admin-email> Authentication__Bootstrap__Role=Admin \
+    ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
 
 az containerapp create -g $RG -n documentprocessing-worker --environment $ENV --image $REGISTRY/worker:latest \
   --min-replicas 1 --user-assigned $IDENTITY_ID \
@@ -61,6 +62,8 @@ API_FQDN=$(az containerapp show -g $RG -n documentprocessing-api --query propert
 az containerapp create -g $RG -n documentprocessing-web --environment $ENV --image $REGISTRY/web:latest \
   --ingress external --target-port 8080 --min-replicas 1 --env-vars API_UPSTREAM=https://$API_FQDN
 ```
+
+`ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` makes the API honour `X-Forwarded-Proto`/`X-Forwarded-For` from the ingress, which terminates TLS. Without it the API sees plain HTTP and the anti-forgery and auth cookies (`Secure` outside Development) cannot be issued, so sign-in fails. The API has internal ingress only, so these headers can only come from the web app and the Container Apps ingress.
 
 Add health probes to the API (liveness `GET /health/live`, readiness `GET /health/ready`, port 8080) in the portal or with `az containerapp update --yaml`. Optionally set `OTEL_EXPORTER_OTLP_ENDPOINT` on the API and worker to export telemetry.
 
