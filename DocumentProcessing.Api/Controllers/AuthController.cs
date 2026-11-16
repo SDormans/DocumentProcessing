@@ -11,7 +11,7 @@ namespace DocumentProcessing.Api.Controllers;
 
 /// <summary>
 /// Authenticatie-eindpunten voor de review-interface.
-/// Users are stored in memory and can be bootstrapped through configuration.
+/// Users are stored with ASP.NET Core Identity in PostgreSQL; an initial administrator can be bootstrapped through configuration.
 /// </summary>
 [ApiController]
 [Route("api/auth")]
@@ -126,7 +126,7 @@ public class AuthController : ControllerBase
             return BadRequest(new { message = "Username, password, and email are required." });
         }
 
-        if (await _userService.UserExistsAsync(request.Username))
+        if (await _userService.UserExistsAsync(request.Username, cancellationToken))
         {
             return BadRequest(new { message = "The user already exists." });
         }
@@ -140,12 +140,16 @@ public class AuthController : ControllerBase
         try
         {
             var user = await _userService.CreateUserAsync(
-                request.Username, request.Password, request.Email, role);
+                request.Username, request.Password, request.Email, role, cancellationToken);
 
             _logger.LogInformation("User {UserId} created by {CreatedBy}.", user.UserId,
                 User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "unknown");
 
             return CreatedAtAction(nameof(Me), user);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
         catch (InvalidOperationException)
         {
