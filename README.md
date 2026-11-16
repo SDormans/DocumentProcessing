@@ -3,7 +3,7 @@
 An ASP.NET Core and React prototype for storing invoice PDFs and reviewing extracted invoice data. The repository contains parts of an invoice-processing architecture, but it is **not yet a working end-to-end AI extraction system**. The current state and limitations are described below so that demo results are not confused with live model output.
 
 > **Project origin:** this project started as a demo for the **Accel Hackathon Paris** (commits from 21–22 October 2026). The state at the end of the hackathon is preserved as the [`hackathon-v0`](https://github.com/SDormans/DocumentProcessing/releases/tag/hackathon-v0) release and tag. Work after that point is being done deliberately in the open, as a portfolio project, and is tracked in the [changelog](CHANGELOG.md). See [Project history](#project-history).
-<!-- TODO: credit teammates here if the hackathon work was done as a team. -->
+
 
 > **Documentation:** the [project wiki](docs/wiki/README.md) covers architecture, configuration, the API, security, deployment, troubleshooting and the [roadmap](docs/wiki/Roadmap.md).
 
