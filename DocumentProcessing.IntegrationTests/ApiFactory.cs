@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using DocumentProcessing.Application.Services.Invoice;
 using DocumentProcessing.Infrastructure.Ai;
+using DocumentProcessing.Infrastructure.Queue;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Mvc.Testing.Handlers;
@@ -50,11 +51,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Authentication:Bootstrap:Email", "admin@example.test");
         builder.UseSetting("Authentication:Bootstrap:Role", "Admin");
         builder.UseSetting("AllowedHosts", "*");
+        builder.UseSetting("RateLimiting:Login:PermitLimit", "1000");
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<IAiProvider>();
             services.AddScoped<IAiProvider>(_ =>
                 new FakeAiProvider(true, InvoiceExtractionSchema.Parse(ExtractedInvoiceJson)));
+            // The worker's processor, so tests can drain the queue in-process.
+            services.AddScoped<QueueCommandProcessor>();
         });
     }
 
@@ -64,6 +68,24 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         var cookies = new CookieContainer();
         var client = CreateDefaultClient(new Uri("https://localhost"), new CookieContainerHandler(cookies));
         return new ApiClient(client, cookies);
+    }
+
+    /// <summary>Claims and processes every queued command, as the worker would.</summary>
+    public async Task<IReadOnlyList<QueueCommandOutcome>> DrainQueueAsync()
+    {
+        const string leaseOwner = "integration-tests";
+        using var scope = Services.CreateScope();
+        var commands = await scope.ServiceProvider.GetRequiredService<IQueueCommandRepository>()
+            .ClaimAsync(leaseOwner, TimeSpan.FromMinutes(5), batchSize: 50);
+
+        var outcomes = new List<QueueCommandOutcome>();
+        foreach (var command in commands)
+        {
+            using var commandScope = Services.CreateScope();
+            outcomes.Add(await commandScope.ServiceProvider.GetRequiredService<QueueCommandProcessor>()
+                .ProcessAsync(command.Id, leaseOwner, CancellationToken.None));
+        }
+        return outcomes;
     }
 
     protected override void Dispose(bool disposing)
