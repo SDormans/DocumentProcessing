@@ -35,6 +35,8 @@ services:
       Authentication__Bootstrap__Password: ${DEMO_ADMIN_PASSWORD:?Set DEMO_ADMIN_PASSWORD in .env}
       Authentication__Bootstrap__Email: ${DEMO_ADMIN_EMAIL:-demo-admin@example.invalid}
       Authentication__Bootstrap__Role: Admin
+      Logging__Console__FormatterName: ${LOG_FORMAT:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,6 +64,8 @@ services:
       Ai__Endpoint: ${AI_ENDPOINT:-https://api.openai.com/v1/}
       Ai__ApiKey: ${AI_API_KEY:-}
       Ai__ModelName: ${AI_MODEL:-gpt-4o-mini}
+      Logging__Console__FormatterName: ${LOG_FORMAT:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     depends_on:
       # The API applies migrations on startup; wait for it before polling the queue.
       api:

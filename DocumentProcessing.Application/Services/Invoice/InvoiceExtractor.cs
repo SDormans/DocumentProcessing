@@ -48,14 +48,34 @@ public class InvoiceExtractor : IInvoiceExtractor
 
     private async Task<InvoiceExtractionResult> RunAsync(Guid documentId, bool allowCorrectionPass, CancellationToken cancellationToken)
     {
+        using var activity = ExtractionTelemetry.ActivitySource.StartActivity("invoice.extract");
+        activity?.SetTag("document.id", documentId);
+
+        var result = await RunCoreAsync(documentId, allowCorrectionPass, cancellationToken);
+
+        activity?.SetTag("extraction.success", result.Success);
+        activity?.SetTag("extraction.version", result.ExtractionVersion);
+        if (!result.Success)
+            activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, "Extraction failed");
+        ExtractionTelemetry.Extractions.Add(1,
+            new KeyValuePair<string, object?>("success", result.Success),
+            new KeyValuePair<string, object?>("correction_pass", result.ExtractionVersion > 1));
+        return result;
+    }
+
+    private async Task<InvoiceExtractionResult> RunCoreAsync(Guid documentId, bool allowCorrectionPass, CancellationToken cancellationToken)
+    {
         var document = await _documentRepository.GetByIdAsync(documentId, cancellationToken);
         if (document is null)
             return InvoiceExtractionResult.FailureResult($"Document {documentId} was not found.");
 
         TextExtractionResult text;
+        using (var stage = ExtractionTelemetry.Stage(ExtractionTelemetry.TextExtraction))
         await using (var stream = await _fileStorage.OpenReadAsync(document.StorageKey, cancellationToken))
         {
             text = await _textExtractor.ExtractAsync(documentId, stream, cancellationToken);
+            stage.Activity?.SetTag("extraction.method", text.Method.ToString());
+            stage.Activity?.SetTag("document.page_count", text.PageCount);
         }
 
         if (!text.HasAnyText)
@@ -67,23 +87,30 @@ public class InvoiceExtractor : IInvoiceExtractor
             return failure;
         }
 
-        var result = await _aiProvider.ExtractAsync(BuildPrompt(text.FullText), cancellationToken);
+        InvoiceExtractionResult result;
+        using (ExtractionTelemetry.Stage(ExtractionTelemetry.LlmExtraction))
+            result = await _aiProvider.ExtractAsync(BuildPrompt(text.FullText), cancellationToken);
         var version = 1;
 
         if (result.Success)
         {
-            await _validationService.ValidateAsync(result, cancellationToken);
+            await ValidateAsync(result, cancellationToken);
             var issues = GetFailingChecks().Select(e => e.Message).ToList();
             if (allowCorrectionPass && issues.Count > 0)
             {
                 _logger.LogInformation("Validation failed for document {DocumentId}; running correction pass.", documentId);
-                var corrected = await _aiProvider.ExtractAsync(
-                    BuildCorrectionPrompt(text.FullText, result.RawResponse ?? string.Empty, issues), cancellationToken);
+                InvoiceExtractionResult corrected;
+                using (var stage = ExtractionTelemetry.Stage(ExtractionTelemetry.LlmExtraction))
+                {
+                    stage.Activity?.SetTag("extraction.correction_pass", true);
+                    corrected = await _aiProvider.ExtractAsync(
+                        BuildCorrectionPrompt(text.FullText, result.RawResponse ?? string.Empty, issues), cancellationToken);
+                }
                 if (corrected.Success)
                 {
                     result = corrected;
                     version = 2;
-                    await _validationService.ValidateAsync(result, cancellationToken);
+                    await ValidateAsync(result, cancellationToken);
                 }
             }
         }
@@ -106,6 +133,13 @@ public class InvoiceExtractor : IInvoiceExtractor
             documentId, result.Success, version, result.Warnings.Count);
 
         return result;
+    }
+
+    private async Task ValidateAsync(InvoiceExtractionResult result, CancellationToken cancellationToken)
+    {
+        using var stage = ExtractionTelemetry.Stage(ExtractionTelemetry.Validation);
+        await _validationService.ValidateAsync(result, cancellationToken);
+        stage.Activity?.SetTag("validation.failing_checks", GetFailingChecks().Count());
     }
 
     private IEnumerable<ValidationResult> GetFailingChecks() =>
