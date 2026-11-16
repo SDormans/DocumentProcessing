@@ -3,6 +3,7 @@ using DocumentProcessing.Application.Services.Invoice;
 using DocumentProcessing.Infrastructure.Ai;
 using DocumentProcessing.Application.Services.TextExtraction;
 using DocumentProcessing.Domain.Interfaces;
+using DocumentProcessing.Infrastructure;
 using DocumentProcessing.Infrastructure.Data;
 using DocumentProcessing.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -49,7 +50,6 @@ builder.Services.AddScoped<IQueueCommandRepository, QueueCommandRepository>();
 builder.Services.AddScoped<IProcessingQueue, DbProcessingQueue>();
 builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
-builder.Services.AddScoped<ValidationService>();
 builder.Services.AddScoped<IDocumentReviewRepository>(
     sp => sp.GetRequiredService<AppDbContext>());
 builder.Services.AddScoped<IInvoiceResultRepository>(
@@ -70,19 +70,12 @@ builder.Services
 builder.Services.AddScoped<IUserService, IdentityUserService>();
 
 // Text extraction services
-builder.Services.AddScoped<IDocumentTextExtractor, PdfPigTextExtractor>();
 builder.Services.AddScoped<ITextExtractionDetector, TextExtractionDetector>();
 builder.Services.AddScoped<IOcrProvider, TesseractOcrProvider>();
 builder.Services.AddScoped<IDocumentTextExtractionService, DocumentTextExtractionService>();
 
-// AI providers
-builder.Services.AddAiProvider(builder.Configuration);
-builder.Services.AddScoped<IInvoiceValidationRule>(_ => new MissingRequiredFieldsValidationRule());
-builder.Services.AddScoped<IInvoiceValidationRule, InvalidDateValidationRule>();
-builder.Services.AddScoped<IInvoiceValidationRule, InvalidNumericValuesValidationRule>();
-builder.Services.AddScoped<IInvoiceValidationRule>(_ => new InconsistentInvoiceAmountsValidationRule());
-builder.Services.AddScoped<IInvoiceValidationRule, InconsistentInvoiceLinesValidationRule>();
-builder.Services.AddScoped<IInvoiceExtractor, InvoiceExtractor>();
+// Text extraction, AI provider, validation and invoice extraction
+builder.Services.AddInvoiceExtraction(builder.Configuration);
 
 // DocumentService options from configuration
 builder.Services.Configure<DocumentServiceOptions>(builder.Configuration.GetSection("DocumentService"));

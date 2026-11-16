@@ -13,6 +13,8 @@ public class QueueCommand
     public string? LastErrorCategory { get; private set; }
     public DateTime? NextAttemptAtUtc { get; private set; }
     public DateTime? CompletedAtUtc { get; private set; }
+    public string? LeaseOwner { get; private set; }
+    public DateTime? LeaseExpiresAtUtc { get; private set; }
 
     public Document? Document { get; private set; }
 
@@ -39,10 +41,21 @@ public class QueueCommand
         LastErrorCategory = null;
     }
 
+    /// <summary>
+    /// In-memory equivalent of the atomic claim done by the queue repository.
+    /// </summary>
+    public void Claim(string leaseOwner, TimeSpan leaseDuration)
+    {
+        MarkProcessing();
+        LeaseOwner = leaseOwner;
+        LeaseExpiresAtUtc = DateTime.UtcNow + leaseDuration;
+    }
+
     public void MarkCompleted()
     {
         Status = QueueCommandStatus.Completed;
         CompletedAtUtc = DateTime.UtcNow;
+        ReleaseLease();
     }
 
     public void MarkFailed(string errorCategory)
@@ -50,6 +63,7 @@ public class QueueCommand
         Status = QueueCommandStatus.Failed;
         LastErrorCategory = errorCategory;
         CompletedAtUtc = DateTime.UtcNow;
+        ReleaseLease();
     }
 
     public void RecordRetry(string errorCategory, TimeSpan delay)
@@ -57,6 +71,13 @@ public class QueueCommand
         Status = QueueCommandStatus.Pending;
         LastErrorCategory = errorCategory;
         NextAttemptAtUtc = DateTime.UtcNow + delay;
+        ReleaseLease();
+    }
+
+    private void ReleaseLease()
+    {
+        LeaseOwner = null;
+        LeaseExpiresAtUtc = null;
     }
 
     public void SetNextAttempt(TimeSpan delay)

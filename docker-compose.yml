@@ -50,6 +50,26 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  worker:
+    build:
+      context: .
+      dockerfile: DocumentProcessing.Worker/Dockerfile
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-documentprocessing};Username=${APP_DB_USER:-documentprocessing_app};Password=${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
+      FileStorage__BasePath: /app/data/storage
+      Ai__Provider: ${AI_PROVIDER:-Fake}
+      Ai__Endpoint: ${AI_ENDPOINT:-https://api.openai.com/v1/}
+      Ai__ApiKey: ${AI_API_KEY:-}
+      Ai__ModelName: ${AI_MODEL:-gpt-4o-mini}
+    depends_on:
+      # The API applies migrations on startup; wait for it before polling the queue.
+      api:
+        condition: service_healthy
+    volumes:
+      - document_storage_demo:/app/data/storage
+    restart: unless-stopped
+
   web:
     build:
       context: DocumentProcessing.Web

@@ -35,6 +35,22 @@ public class QueueCommandConfiguration : IEntityTypeConfiguration<QueueCommand>
         builder.Property(qc => qc.CompletedAtUtc)
             .IsRequired(false);
 
+        // Concurrency token: a worker whose lease was taken over cannot overwrite the new owner's state.
+        builder.Property(qc => qc.LeaseOwner)
+            .HasMaxLength(200)
+            .IsConcurrencyToken();
+
+        builder.Property(qc => qc.LeaseExpiresAtUtc)
+            .IsRequired(false);
+
+        builder.HasIndex(qc => new { qc.Status, qc.NextAttemptAtUtc });
+
+        // At most one active (Pending/Processing) command per document.
+        builder.HasIndex(qc => qc.DocumentId)
+            .IsUnique()
+            .HasFilter("\"Status\" IN (0, 1)")
+            .HasDatabaseName("IX_QueueCommands_DocumentId_Active");
+
         builder.HasOne(qc => qc.Document)
             .WithMany()
             .HasForeignKey(qc => qc.DocumentId)
