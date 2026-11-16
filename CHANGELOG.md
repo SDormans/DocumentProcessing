@@ -7,6 +7,8 @@ All notable changes to this project are documented here.
 ### Added
 - README: project origin note and project history section (hackathon version vs portfolio version).
 - This changelog.
+- Invoice extraction: `InvoiceExtractor` with strict JSON-schema LLM output (`InvoiceExtractionSchema`), OpenAI-compatible `OpenAiProvider` (retries, timeouts, token/cost metrics), selected by `Ai:Provider`.
+- Uploads stage a `QueueCommand` in the same transaction as the document.
 
 ### Planned
 - LLM-based invoice extraction with schema-constrained output and deterministic validation.
