@@ -22,12 +22,14 @@ namespace DocumentProcessing.Infrastructure.Data.Migrations
                 nullable: false,
                 defaultValue: 0u);
 
-            // Earlier versions could insert several reviews for one document; keep the oldest so the unique index can be created.
+            // Refuse to guess which of several reviews per document is authoritative; deleting one would also cascade its audit trail.
             migrationBuilder.Sql("""
-                DELETE FROM "DocumentReviews" r
-                USING "DocumentReviews" keep
-                WHERE r."DocumentId" = keep."DocumentId"
-                  AND (keep."CreatedAtUtc", keep."Id") < (r."CreatedAtUtc", r."Id");
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM "DocumentReviews" GROUP BY "DocumentId" HAVING COUNT(*) > 1) THEN
+                        RAISE EXCEPTION 'DocumentReviews contains several reviews for the same document. Resolve them manually (SELECT "DocumentId" FROM "DocumentReviews" GROUP BY "DocumentId" HAVING COUNT(*) > 1) before applying UniqueReviewPerDocument.';
+                    END IF;
+                END $$;
                 """);
 
             migrationBuilder.CreateIndex(
