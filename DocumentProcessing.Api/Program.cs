@@ -4,6 +4,8 @@ using DocumentProcessing.Infrastructure.Ai;
 using DocumentProcessing.Application.Services.TextExtraction;
 using DocumentProcessing.Domain.Interfaces;
 using DocumentProcessing.Infrastructure.Data;
+using DocumentProcessing.Infrastructure.Identity;
+using Microsoft.AspNetCore.Identity;
 using DocumentProcessing.Infrastructure.Ocr;
 using DocumentProcessing.Infrastructure.Storage;
 using DocumentProcessing.Infrastructure.TextExtraction;
@@ -31,12 +33,6 @@ builder.Configuration
     .AddJsonFile("appsettings.Development.json", optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
 
-if (!builder.Environment.IsDevelopment())
-{
-    throw new InvalidOperationException(
-        "This sample application uses an in-memory demonstration user store and cannot run outside Development.");
-}
-
 // Services
 builder.Services.AddDbContext<AppDbContext>((sp, options) =>
 {
@@ -59,11 +55,19 @@ builder.Services.AddScoped<IDocumentReviewRepository>(
 builder.Services.AddScoped<IInvoiceResultRepository>(
     sp => sp.GetRequiredService<AppDbContext>());
 builder.Services.AddScoped<IDocumentReviewService, DocumentReviewService>();
-builder.Services.AddSingleton<IUserService>(_ => new DevelopmentUserService(
-    builder.Configuration["Authentication:Bootstrap:Username"],
-    builder.Configuration["Authentication:Bootstrap:Password"],
-    builder.Configuration["Authentication:Bootstrap:Email"],
-    builder.Configuration["Authentication:Bootstrap:Role"]));
+builder.Services
+    .AddIdentityCore<ApplicationUser>(options =>
+    {
+        options.User.RequireUniqueEmail = true;
+        options.Password.RequiredLength = 12;
+        options.Password.RequireNonAlphanumeric = false;
+        options.Lockout.AllowedForNewUsers = true;
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+    })
+    .AddRoles<IdentityRole>()
+    .AddEntityFrameworkStores<AppDbContext>();
+builder.Services.AddScoped<IUserService, IdentityUserService>();
 
 // Text extraction services
 builder.Services.AddScoped<IDocumentTextExtractor, PdfPigTextExtractor>();
@@ -184,6 +188,7 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await dbContext.Database.MigrateAsync();
+    await IdentitySeeder.SeedAsync(scope.ServiceProvider, app.Configuration);
 }
 
 app.Run();
