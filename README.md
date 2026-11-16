@@ -51,7 +51,7 @@ Synthetic corpus ──► prediction JSONL ──► evaluation report
 | `DocumentProcessing.Worker` | Background worker that processes queued documents; started by Compose as `worker`. Tuned with `QueueProcessing:*`. |
 | `DocumentProcessing.Web` | React/TypeScript interface, served by Nginx in Compose. |
 | `DocumentProcessing.UnitTests` | Unit tests for application services and validation. |
-| `DocumentProcessing.IntegrationTests` | Controller-level tests; these currently use mocks and do not exercise a live PostgreSQL-backed HTTP server. |
+| `DocumentProcessing.IntegrationTests` | Tests against the real API host and a PostgreSQL container (Testcontainers): migrations, auth, upload → extraction → review. |
 | `tools/evaluation` | Synthetic dataset generator and JSONL prediction evaluator. |
 
 The API persists uploaded documents and exposes review endpoints. Although PDF text extraction, OCR, invoice validation, and provider abstractions exist, the invoice extractor methods are unimplemented, the configured fake provider does not extract invoice fields, and the real provider has no external AI client. Uploads are not queued by the API. Consequently, there is no functioning upload-to-extraction-to-review pipeline yet.
@@ -127,9 +127,11 @@ Users are stored with ASP.NET Core Identity in PostgreSQL (`AspNetUsers`/`AspNet
 
 For Azure Blob Storage, set either `ConnectionString` (for example Azurite: `UseDevelopmentStorage=true`) or `ServiceUri` (`https://<account>.blob.core.windows.net`). With `ServiceUri` the app authenticates through `DefaultAzureCredential`: a managed identity in Azure (set `ManagedIdentityClientId` for a user-assigned one) or your `az login` locally. That identity needs the **Storage Blob Data Contributor** role on the container. Provision the container (`ContainerName`, default `documents`) up front, or set `CreateContainerIfNotExists=true` for local testing. Blobs are written once and never overwritten; the storage key is the blob name.
 
-### Database migration impact
+### Database migrations
 
-The legacy `InitialCreate` migration is a no-op because the earlier `DescribeYourChanges` migration already creates its tables; this prevents fresh databases from attempting to create them twice. The added `SyncCurrentModel` migration creates the missing `QueueCommands` table and removes a redundant single-column invoice-result index already covered by a composite index. Applying it preserves existing rows. Rolling it back drops `QueueCommands` and any rows written to it; back up the database before rollback.
+The pre-release migration history was squashed into one baseline migration, `InitialBaseline` (`DocumentProcessing.Infrastructure/Data/Migrations`), which creates the full current schema, including the one-review-per-document unique index. New schema changes are added as migrations on top of it.
+
+Databases created from the old history (`DescribeYourChanges` through `UniqueReviewPerDocument`) already have exactly this schema. On startup the API detects that history and replaces its rows in `__EFMigrationsHistory` with the baseline entry, without touching any table. A database that stopped partway through the old history is refused with an error naming the missing migrations; upgrade it with a release from before the squash first, or recreate it.
 
 ## Build and test
 
@@ -145,7 +147,7 @@ npm --prefix DocumentProcessing.Web run build
 docker compose --env-file .env.example config --quiet
 ```
 
-The .NET integration-test project currently contains controller-level tests with mocks; it does not validate migrations or HTTP/database behavior against PostgreSQL. The frontend build runs strict TypeScript checks followed by a Vite production build. The Node test suite checks dataset invariants and evaluator calculations.
+The .NET integration tests need a running Docker daemon: Testcontainers starts a `postgres:16-alpine` container for the run, and each test class gets its own database. They boot the real API in-process (migrations, Identity, cookie auth, anti-forgery, ownership checks) with the fake AI provider, drain the queue with the worker's `QueueCommandProcessor`, and cover the migration baseline, sign-in and authorization, and upload → extraction → correction → approval. The frontend build runs strict TypeScript checks followed by a Vite production build. The Node test suite checks dataset invariants and evaluator calculations.
 
 ## Synthetic extraction evaluation
 
@@ -212,6 +214,16 @@ Known security limitations:
 - Local file storage (the default) and a local PostgreSQL volume are suitable only for a single host; use `FileStorage:Provider=AzureBlob` (see [Document storage](#document-storage)) when the API and worker run on separate hosts or replicas.
 - The queue is at-least-once: a document whose lease expires mid-extraction is processed again, which can cost a second AI call. `QueueProcessing:LeaseDuration` must exceed the worst-case AI timeout.
 - AI prompts, schema parsing, provider retries, production secret rotation, and model-cost accounting cannot be evaluated until a real provider and extractor exist.
+
+## Observability
+
+The API and worker share one setup (`DocumentProcessing.Infrastructure/Observability/ObservabilityExtensions.cs`):
+
+- **Structured logs:** JSON console output (UTC timestamps, scopes, `TraceId`/`SpanId`) outside Development, plain text in Development. Override with `Logging:Console:FormatterName` (`json` or `simple`; `LOG_FORMAT` in Compose). The worker's queue logs carry `QueueCommandId`, `DocumentId` and `Attempt` scopes.
+- **OpenTelemetry:** traces, metrics and logs are exported over OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (standard `OTEL_*` variables such as `OTEL_EXPORTER_OTLP_PROTOCOL` and `OTEL_EXPORTER_OTLP_HEADERS` apply). When it is unset nothing is exported. Services report as `documentprocessing-api` and `documentprocessing-worker`.
+  - Traces: `ProcessQueueCommand` → `invoice.extract` → `invoice.text_extraction`, `invoice.llm_extraction` (with an `ai.extract` client span for the HTTP call to the LLM), `invoice.validation`; plus ASP.NET Core requests (health probes excluded), outgoing HTTP and Npgsql database commands.
+  - Metrics: `documentprocessing.pipeline.commands` / `.duration` (per queue command, by outcome), `documentprocessing.extraction.stage.duration` (by stage), `documentprocessing.extraction.results`, `ai.requests`, `ai.request.duration`, `ai.tokens.input`, `ai.tokens.output`, `ai.cost`, plus ASP.NET Core, HttpClient and .NET runtime metrics.
+- **Health:** `/health/live` returns 200 whenever the API process is serving requests and checks no dependencies (use for liveness probes). `/health/ready` returns 503 until PostgreSQL is reachable (use for readiness probes and startup ordering). Both are anonymous.
 
 ## CI
 

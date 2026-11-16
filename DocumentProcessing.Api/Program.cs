@@ -1,8 +1,17 @@
 using DocumentProcessing.Api.Extensions;
 using DocumentProcessing.Api.Middleware;
 using DocumentProcessing.Infrastructure;
+using DocumentProcessing.Infrastructure.Observability;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.AddObservability(
+    "documentprocessing-api",
+    tracing => tracing.AddAspNetCoreInstrumentation(options =>
+        options.Filter = context => !context.Request.Path.StartsWithSegments("/health")),
+    metrics => metrics.AddAspNetCoreInstrumentation());
 
 builder.Services
     .AddPersistence(builder.Configuration)
