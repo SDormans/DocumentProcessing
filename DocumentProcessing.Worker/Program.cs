@@ -1,41 +1,26 @@
-using DocumentProcessing.Application.Services;
-using DocumentProcessing.Worker;
-using DocumentProcessing.Domain.Entities;
-using DocumentProcessing.Domain.Enums;
 using DocumentProcessing.Domain.Interfaces;
+using DocumentProcessing.Infrastructure;
 using DocumentProcessing.Infrastructure.Data;
 using DocumentProcessing.Infrastructure.Queue;
 using DocumentProcessing.Infrastructure.Storage;
+using DocumentProcessing.Worker;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 
-var builder = Host.CreateDefaultBuilder(args)
-    .ConfigureServices((context, services) =>
-    {
-        // Configure database
-        var connectionString = context.Configuration.GetConnectionString("DefaultConnection");
-        services.AddDbContext<AppDbContext>(options =>
-        {
-            options.UseNpgsql(connectionString);
-        });
+var builder = Host.CreateApplicationBuilder(args);
 
-        // Register repositories
-        services.AddScoped<IDocumentRepository, AppDbContext>();
-        services.AddScoped<IQueueCommandRepository, QueueCommandRepository>();
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+    throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required.");
 
-        // Register other services
-        services.AddScoped<DocumentService>();
-        services.AddScoped<IFileStorage, LocalFileStorage>();
-        services.AddScoped<ValidationService>();
+// The API owns migrations; the worker only reads and writes rows.
+builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+builder.Services.AddScoped<IDocumentRepository>(sp => sp.GetRequiredService<AppDbContext>());
+builder.Services.AddScoped<IQueueCommandRepository, QueueCommandRepository>();
+builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
+builder.Services.AddInvoiceExtraction(builder.Configuration);
 
-        // Register the hosted service (the worker)
-        services.AddHostedService<DocumentProcessingWorker>();
-    })
-    .Build();
+builder.Services.Configure<QueueProcessingOptions>(builder.Configuration.GetSection(QueueProcessingOptions.SectionName));
+builder.Services.AddScoped<QueueCommandProcessor>();
+builder.Services.AddHostedService<DocumentProcessingWorker>();
 
-builder.Run();
+builder.Build().Run();
