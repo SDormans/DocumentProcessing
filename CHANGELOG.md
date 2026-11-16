@@ -16,6 +16,9 @@ All notable changes to this project are documented here.
 - Migration history squashed into a single `InitialBaseline`; existing databases are re-pointed to it on startup.
 - Testcontainers integration tests for migrations, auth and the upload → extraction → review flow.
 
+### Removed
+- The stale `0001-docs-…patch` (its README/changelog content was already applied in revised form).
+
 ### Planned
 - LLM-based invoice extraction with schema-constrained output and deterministic validation.
 - Published evaluation scorecard on the 50-invoice synthetic corpus.
