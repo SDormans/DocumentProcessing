@@ -12,6 +12,8 @@ public static class MigrationBaseline
 {
     public const string BaselineMigrationId = "20261116183700_InitialBaseline";
 
+    private const long AdoptionLockKey = 0x446F6350726F6301; // arbitrary, unique to this adoption step
+
     /// <summary>The squashed migrations, in the order they were applied.</summary>
     public static readonly IReadOnlyList<string> LegacyMigrationIds =
     [
@@ -35,6 +37,10 @@ public static class MigrationBaseline
     public static async Task<bool> AdoptLegacyHistoryAsync(
         AppDbContext dbContext, ILogger logger, CancellationToken cancellationToken = default)
     {
+        // Serialize concurrent API instances: the loser waits, then sees the baseline row and does nothing.
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync($"SELECT pg_advisory_xact_lock({AdoptionLockKey})", cancellationToken);
+
         var applied = (await dbContext.Database.GetAppliedMigrationsAsync(cancellationToken)).ToList();
         if (applied.Contains(BaselineMigrationId))
             return false;
@@ -51,7 +57,6 @@ public static class MigrationBaseline
 
         var legacyIds = LegacyMigrationIds.ToArray();
         var productVersion = ProductInfo.GetVersion();
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         await dbContext.Database.ExecuteSqlAsync(
             $"""DELETE FROM "__EFMigrationsHistory" WHERE "MigrationId" = ANY({legacyIds})""", cancellationToken);
         await dbContext.Database.ExecuteSqlAsync(

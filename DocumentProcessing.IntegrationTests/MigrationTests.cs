@@ -54,6 +54,38 @@ public class MigrationTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Concurrent_adoption_rewrites_the_history_exactly_once()
+    {
+        var connectionString = await postgres.CreateDatabaseAsync();
+        await using (var setup = CreateContext(connectionString))
+            await setup.Database.MigrateAsync();
+        await RewriteHistoryAsync(connectionString, MigrationBaseline.LegacyMigrationIds);
+
+        // Hold back history writes (reads still pass) so every instance reads the legacy history before any commits.
+        await using var blocker = new NpgsqlConnection(connectionString);
+        await blocker.OpenAsync();
+        await using var blockerTx = await blocker.BeginTransactionAsync();
+        await using (var lockTable = new NpgsqlCommand(
+                         "LOCK TABLE \"__EFMigrationsHistory\" IN SHARE ROW EXCLUSIVE MODE", blocker, blockerTx))
+            await lockTable.ExecuteNonQueryAsync();
+
+        const int instances = 4;
+        var adoptions = Enumerable.Range(0, instances).Select(_ => Task.Run(async () =>
+        {
+            await using var db = CreateContext(connectionString);
+            return await MigrationBaseline.AdoptLegacyHistoryAsync(db, NullLogger.Instance);
+        })).ToList();
+        await WaitForBlockedSessionsAsync(connectionString, instances);
+        await blockerTx.RollbackAsync();
+
+        var results = await Task.WhenAll(adoptions);
+
+        results.Count(adopted => adopted).Should().Be(1);
+        await using var check = CreateContext(connectionString);
+        (await check.Database.GetAppliedMigrationsAsync()).Should().Equal(MigrationBaseline.BaselineMigrationId);
+    }
+
+    [Fact]
     public async Task Adoption_is_a_no_op_for_empty_and_baselined_databases()
     {
         await using var db = CreateContext(await postgres.CreateDatabaseAsync());
@@ -74,6 +106,23 @@ public class MigrationTests(PostgresFixture postgres)
         var act = () => MigrationBaseline.AdoptLegacyHistoryAsync(db, NullLogger.Instance);
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*AddAspNetCoreIdentity*");
+    }
+
+    private static async Task WaitForBlockedSessionsAsync(string connectionString, int expected)
+    {
+        // Own connection: pg_stat_activity is snapshotted per transaction.
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using var count = new NpgsqlCommand(
+            "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'",
+            connection);
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            if ((long)(await count.ExecuteScalarAsync())! >= expected)
+                return;
+            await Task.Delay(100);
+        }
+        throw new TimeoutException($"Expected {expected} sessions waiting on locks.");
     }
 
     private static async Task RewriteHistoryAsync(string connectionString, IEnumerable<string> migrationIds)
