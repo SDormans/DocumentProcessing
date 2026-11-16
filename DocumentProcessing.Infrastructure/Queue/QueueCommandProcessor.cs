@@ -25,7 +25,6 @@ public enum QueueCommandOutcome
 /// </summary>
 public class QueueCommandProcessor
 {
-    private const int MaxRawResponseLength = 4000;
     private const int MaxErrorLength = 2000;
     private const int MaxErrorCategoryLength = 100;
 
@@ -119,6 +118,9 @@ public class QueueCommandProcessor
             return QueueCommandOutcome.Failed;
         }
 
+        // Renewing the lease puts the command (and its LeaseOwner concurrency token) in this UPDATE,
+        // so a worker whose lease was taken over cannot overwrite the document status.
+        command.RenewLease(_options.LeaseDuration);
         document.UpdateStatus(DocumentStatus.Processing);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -199,7 +201,7 @@ public class QueueCommandProcessor
             ExtractionMethod = Truncate(result.ExtractionMethod, 50),
             PageCount = result.PageCount,
             TotalCharacterCount = result.TotalCharacterCount,
-            RawAiResponse = TruncateOrNull(result.RawResponse, MaxRawResponseLength),
+            RawAiResponse = string.IsNullOrEmpty(result.RawResponse) ? null : result.RawResponse,
             ErrorMessage = result.Success ? null : Truncate(string.Join("; ", result.Warnings), MaxErrorLength),
             SupplierName = result.SupplierName,
             SupplierNameHasValue = result.SupplierNameHasValue,
@@ -219,8 +221,8 @@ public class QueueCommandProcessor
             TotalAmountHasValue = result.TotalAmountHasValue,
             Lines = result.Lines is { Count: > 0 } ? string.Join("\n", result.Lines) : null,
             LinesHasValue = result.LinesHasValue,
-            LineItemsJson = result.Lines is { Count: > 0 } ? TruncateOrNull(JsonSerializer.Serialize(result.Lines), 10000) : null,
-            WarningsJson = TruncateOrNull(JsonSerializer.Serialize(warnings), 4000),
+            LineItemsJson = result.Lines is { Count: > 0 } ? JsonSerializer.Serialize(result.Lines) : null,
+            WarningsJson = JsonSerializer.Serialize(warnings),
             ExtractedAtUtc = DateTime.UtcNow
         });
     }
@@ -239,7 +241,4 @@ public class QueueCommandProcessor
 
     private static string Truncate(string value, int maxLength) =>
         value.Length <= maxLength ? value : value[..maxLength];
-
-    private static string? TruncateOrNull(string? value, int maxLength) =>
-        string.IsNullOrEmpty(value) ? null : Truncate(value, maxLength);
 }
