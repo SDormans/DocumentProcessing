@@ -121,6 +121,20 @@ public class DocumentService : IDocumentService
         return documents.Select(MapToDto).ToList();
     }
 
+    public async Task<DocumentPage> GetDocumentPageAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+    {
+        string? ownerId = null;
+        if (!_currentUser.HasUnrestrictedDocumentAccess)
+        {
+            if (string.IsNullOrEmpty(_currentUser.UserId))
+                return new DocumentPage([], 0);
+            ownerId = _currentUser.UserId;
+        }
+
+        var (items, total) = await _documentRepository.QueryAsync(query, ownerId, cancellationToken);
+        return new DocumentPage(items.Select(MapToDto).ToList(), total);
+    }
+
     public async Task<DocumentFileDto?> GetDocumentFileAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var document = await GetAccessibleDocumentAsync(id, cancellationToken);

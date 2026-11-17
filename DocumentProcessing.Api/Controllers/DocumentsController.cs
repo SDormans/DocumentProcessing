@@ -1,3 +1,5 @@
+using DocumentProcessing.Domain.Interfaces;
+using DocumentProcessing.Domain.Entities;
 using DocumentProcessing.Application.DTOs;
 using DocumentProcessing.Application.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -95,11 +97,32 @@ public class DocumentsController : ControllerBase
     /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<DocumentDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetDocuments(CancellationToken cancellationToken)
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetDocuments(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize,
+        [FromQuery] string? status = null,
+        [FromQuery] string? search = null,
+        CancellationToken cancellationToken = default)
     {
-        var documents = await _documentService.GetDocumentsAsync(cancellationToken);
-        return Ok(documents);
+        if (page < 1 || pageSize < 1 || pageSize > MaxPageSize)
+            return BadRequest(new { message = $"page must be 1 or more and pageSize between 1 and {MaxPageSize}." });
+        DocumentStatus? statusFilter = null;
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (!Enum.TryParse<DocumentStatus>(status, ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
+                return BadRequest(new { message = $"Unknown status '{status}'." });
+            statusFilter = parsed;
+        }
+
+        var result = await _documentService.GetDocumentPageAsync(
+            new DocumentQuery(statusFilter, search, (page - 1) * pageSize, pageSize), cancellationToken);
+        Response.Headers["X-Total-Count"] = result.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return Ok(result.Items);
     }
+
+    private const int DefaultPageSize = 50;
+    private const int MaxPageSize = 200;
 
     /// <summary>
     /// Returns a single document by its ID.

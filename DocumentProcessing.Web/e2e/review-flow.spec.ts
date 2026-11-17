@@ -15,7 +15,7 @@ test('upload → review → correct → approve', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Documents' })).toBeVisible();
 
   // Over 1 MB, so this also proves the web proxy forwards uploads up to the API limit.
-  await page.getByLabel('Upload a synthetic invoice PDF').setInputFiles({
+  await page.getByLabel('Upload invoice PDFs').setInputFiles({
     name: fileName,
     mimeType: 'application/pdf',
     buffer: createPdf('Invoice E2E-001 from Acme B.V. Total EUR 121.00', 2 * 1024 * 1024),

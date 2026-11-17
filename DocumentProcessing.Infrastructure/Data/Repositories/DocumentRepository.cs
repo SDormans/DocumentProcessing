@@ -30,6 +30,30 @@ public class DocumentRepository : IDocumentRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<(IReadOnlyList<Document> Items, int TotalCount)> QueryAsync(
+        DocumentQuery query, string? ownerId, CancellationToken cancellationToken = default)
+    {
+        var documents = _dbContext.Documents.AsQueryable();
+        if (ownerId != null)
+            documents = documents.Where(d => d.OwnerId == ownerId);
+        if (query.Status is { } status)
+            documents = documents.Where(d => d.Status == status);
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var search = query.Search.Trim().ToLower();
+            documents = documents.Where(d => d.OriginalFileName.ToLower().Contains(search));
+        }
+
+        var total = await documents.CountAsync(cancellationToken);
+        var items = await documents
+            .OrderByDescending(d => d.CreatedAtUtc)
+            .ThenBy(d => d.Id)
+            .Skip(query.Skip)
+            .Take(query.Take)
+            .ToListAsync(cancellationToken);
+        return (items, total);
+    }
+
     public async Task<IReadOnlyList<Document>> GetByOwnerAsync(string ownerId, CancellationToken cancellationToken = default)
     {
         return await _dbContext.Documents

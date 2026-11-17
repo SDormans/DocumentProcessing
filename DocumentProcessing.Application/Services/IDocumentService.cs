@@ -1,3 +1,4 @@
+using DocumentProcessing.Domain.Interfaces;
 using DocumentProcessing.Application.DTOs;
 
 namespace DocumentProcessing.Application.Services;
@@ -14,5 +15,10 @@ public interface IDocumentService
 
     Task<IReadOnlyList<DocumentDto>> GetDocumentsAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>One page of the documents the current user may see, newest first.</summary>
+    Task<DocumentPage> GetDocumentPageAsync(DocumentQuery query, CancellationToken cancellationToken = default);
+
     Task<DocumentFileDto?> GetDocumentFileAsync(Guid id, CancellationToken cancellationToken = default);
 }
+
+public sealed record DocumentPage(IReadOnlyList<DocumentDto> Items, int TotalCount);

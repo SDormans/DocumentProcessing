@@ -18,7 +18,7 @@ In Development, Swagger UI is available at `/swagger`.
 | Method | Path | Access | Notes |
 |---|---|---|---|
 | POST | `/api/documents` | Signed in; 20/min per user | `multipart/form-data`, field `file`. `201`, `400` validation, `413` too large |
-| GET | `/api/documents` | Signed in | Own documents; all for unrestricted roles |
+| GET | `/api/documents` | Signed in | Own documents; all for unrestricted roles. Query: `page` (1+), `pageSize` (1-200, default 50), `status`, `search` (file name). Total in `X-Total-Count`; `400` for bad values |
 | GET | `/api/documents/{id}` | Signed in, owner | `404` if missing **or not yours** |
 | GET | `/api/documents/{id}/content` | Signed in, owner | The PDF |
 

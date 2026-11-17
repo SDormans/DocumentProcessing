@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+- Document list paging, status filter and file-name search: `GET /api/documents?page=&pageSize=&status=&search=` (page size 1-200, default 50) with the total in `X-Total-Count`. The web list has a search box, status filter and pager.
+- Batch upload: the web upload accepts several PDFs and uploads them one by one, listing any that failed.
+
 ### Changed
 - All API messages, validation messages, extraction warnings and code comments are now English (the UI already was).
 

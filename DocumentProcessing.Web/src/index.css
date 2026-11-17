@@ -173,3 +173,11 @@ textarea {
 .btn-reject {
   background: #a51d24;
 }
+
+.list-filters,
+.pager {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.75rem 0;
+}

@@ -103,14 +103,16 @@ public class DocumentsControllerTests
     public async Task GetDocuments_ReturnsOk()
     {
         // Arrange
-        _mockService.Setup(s => s.GetDocumentsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<DocumentDto>());
+        _mockService.Setup(s => s.GetDocumentPageAsync(It.IsAny<DocumentProcessing.Domain.Interfaces.DocumentQuery>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DocumentPage(new List<DocumentDto>(), 0));
+        _controller.ControllerContext = new ControllerContext { HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext() };
 
         // Act
-        var result = await _controller.GetDocuments(CancellationToken.None);
+        var result = await _controller.GetDocuments(cancellationToken: CancellationToken.None);
 
         // Assert
         result.Should().BeOfType<OkObjectResult>();
+        _controller.Response.Headers["X-Total-Count"].ToString().Should().Be("0");
     }
 
     [Fact]
