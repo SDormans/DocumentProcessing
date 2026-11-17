@@ -121,7 +121,10 @@ $env:Authentication__Bootstrap__Username = "demo-admin"
 $env:Authentication__Bootstrap__Password = "REPLACE_WITH_A_UNIQUE_PASSWORD"
 $env:Authentication__Bootstrap__Email = "demo-admin@example.invalid"
 dotnet run --project DocumentProcessing.Api
+dotnet run --project DocumentProcessing.Worker   # same shell: needs the same connection string
 ```
+
+The worker exits with `ConnectionStrings:DefaultConnection is required` when no connection string is set. Besides the environment variable, it reads `dotnet user-secrets` (`--project DocumentProcessing.Worker`) and a git-ignored `DocumentProcessing.Worker/appsettings.Development.json` (template: `appsettings.Development.example.json`); see [Getting Started](docs/wiki/Getting-Started.md#run-the-api-without-docker).
 
 Users are stored with ASP.NET Core Identity in PostgreSQL (`AspNetUsers`/`AspNetRoles` tables). On startup the API applies migrations, ensures the `Admin` and `Reviewer` roles exist, and creates the bootstrap user only if it does not exist yet; changing the bootstrap variables later does not modify an existing account. Additional users are created by an administrator through `POST /api/auth/register`.
 

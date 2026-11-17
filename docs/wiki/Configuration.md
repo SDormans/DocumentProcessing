@@ -1,6 +1,6 @@
 # Configuration
 
-Standard ASP.NET Core configuration: `appsettings*.json`, then environment variables (`Section__Key`), then command line. Secrets belong in environment variables or a secret store, never in committed files. `DocumentProcessing.Api/appsettings.example.json` lists every key.
+Standard ASP.NET Core configuration: `appsettings*.json`, then environment variables (`Section__Key`), then command line. Secrets belong in environment variables or a secret store, never in committed files. `DocumentProcessing.Api/appsettings.example.json` lists every key. For running the worker locally (environment variable, `dotnet user-secrets` or a git-ignored `appsettings.Development.json`), see [Getting Started](Getting-Started.md#run-the-api-without-docker).
 
 ## Shared by the API and the worker
 

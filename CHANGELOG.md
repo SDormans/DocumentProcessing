@@ -18,6 +18,7 @@ All notable changes to this project are documented here.
 - CD workflow (`cd.yml`): images to GHCR, deploy to Azure Container Apps via OIDC; ADR 0002; `docs/deployment.md`.
 - Web image: the Nginx API upstream is configurable with `API_UPSTREAM` (default `http://api:8080`).
 - Project wiki in `docs/wiki/` (architecture, configuration, API, security, deployment, troubleshooting, roadmap).
+- Worker local configuration: `dotnet user-secrets` support, a Development launch profile and `appsettings.Development.example.json`; the missing-connection-string error now lists the ways to set it.
 - Review screen shows every extracted field with its validation messages, the extracted value next to corrected ones, and a PDF preview.
 - Server-side checks on review input: known field names, length limits, `yyyy-MM-dd` dates, `1234.56` amounts, ISO currency codes, rejection reason length.
 - Front-end tests (Vitest + Testing Library) and a Playwright browser smoke test of upload → review → approve, run by the new `e2e` CI job.
