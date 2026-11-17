@@ -20,6 +20,7 @@ All notable changes to this project are documented here.
 - Project wiki in `docs/wiki/` (architecture, configuration, API, security, deployment, troubleshooting, roadmap).
 
 ### Changed
+- Admin endpoint `POST /api/documents/{id}/requeue` puts a failed document back on the queue.
 - EF Core, ASP.NET Core Identity, `Microsoft.Extensions.*` and the Npgsql EF provider aligned on .NET 10 (10.0.15 / Npgsql 10.0.3).
 - PDF text extraction uses the official `PdfPig` 0.1.16 package instead of the third-party `UglyToad.PdfPig 1.7.0-custom-5` upload.
 - `TreatWarningsAsErrors` is on for every project (`Directory.Build.props`); the duplicate EF InMemory reference and the obsolete Testcontainers constructor are gone.
