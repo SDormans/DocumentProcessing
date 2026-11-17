@@ -14,7 +14,7 @@
 | Document `NeedsReview` with empty fields | `Ai:Provider=Fake`. Configure `OpenAI` |
 | Document `Failed` with "The Local model ... could not be reached" | The local runtime is down or the model is not pulled. Check the warning under the model dropdown, run `ollama pull <model>`, or use "Switch to Cloud model and retry" |
 | Startup fails with `Invalid AI configuration: ...` | The message names every wrong `Ai:*` setting; see [Configuration](Configuration.md#cloud-and-local-models) |
-| Document `Failed` | Check `QueueCommands.LastErrorCategory`. No text (scanned PDF, no OCR yet), or the LLM refused or returned schema-invalid output (not retried), or timeouts/5xx after `MaxAttempts` |
+| Document `Failed` | Check `QueueCommands.LastErrorCategory`. No text (scanned PDF and `tesseract`/`pdftoppm` missing from the worker's `PATH`, or OCR found nothing), or the LLM refused or returned schema-invalid output (not retried), or timeouts/5xx after `MaxAttempts` |
 | Worker logs every SQL command | Set `WORKER_SQL_LOG_LEVEL=Warning` (the Compose default); `Information` shows each queue poll |
 | Sign-in fails in Azure with 500 | `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` missing on the API |
 | Everyone is logged out after a deploy | Data Protection keys aren't persisted yet ([Roadmap](Roadmap.md)) |
