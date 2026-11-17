@@ -246,6 +246,7 @@ GitHub Actions is configured in [`.github/workflows/ci.yml`](./.github/workflows
 ## Troubleshooting
 
 - **Compose asks for environment variables:** copy `.env.example` to `.env` and replace the placeholder passwords.
+- **API exits with `Could not connect to PostgreSQL at <host>:<port>`:** PostgreSQL is not running or not listening on that address. Start it (`docker compose up -d postgres`) and check `ConnectionStrings:DefaultConnection`; the API retries `Database:ConnectAttempts` times (default 10, 3 s apart) before giving up.
 - **Database readiness stays unhealthy:** inspect `docker compose logs postgres`; confirm the configured database/user/password and ensure local port 5432 is available.
 - **API container exits during startup:** inspect `docker compose logs api`. The API requires the PostgreSQL health check and complete bootstrap username/password settings.
 - **Login fails for the bootstrap user:** the account is only created when it does not exist yet. If the database volume already contains the user, the existing password still applies; reset the volume (`docker compose down -v`) to re-seed in a demo environment.

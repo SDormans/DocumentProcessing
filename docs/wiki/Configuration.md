@@ -26,6 +26,7 @@ Standard ASP.NET Core configuration: `appsettings*.json`, then environment varia
 | `DocumentAccess:UnrestrictedRoles` | `["Admin"]` | Roles that see all documents. The configured list **replaces** the default |
 | `RateLimiting:Login:PermitLimit` / `Period` | `5` / `00:01:00` | Per client IP |
 | `RateLimiting:Upload:PermitLimit` / `Period` | `20` / `00:01:00` | Per signed-in user |
+| `Database:ConnectAttempts` / `ConnectRetryDelay` | `10` / `00:00:03` | Before migrating at startup, the API retries while PostgreSQL refuses connections, then exits with an error naming the host and port |
 | `ASPNETCORE_FORWARDEDHEADERS_ENABLED` | `false` | Set `true` behind a TLS-terminating proxy (Azure), or secure cookies can't be issued |
 
 ## Worker
