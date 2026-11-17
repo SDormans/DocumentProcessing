@@ -5,6 +5,14 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 ### Added
+- OCR for scanned PDFs: pages without a text layer are rendered with `pdftoppm` and read with the `tesseract` CLI (English + Dutch), installed in the worker image. Digital PDFs skip OCR. Settings under `Ocr:*`.
+- Documents whose text exceeds the 48,000-character prompt limit get a warning saying the text was truncated.
+- `Ai:MaxCostPerDocument`: per-document AI cost budget. When the first pass reaches it, the correction pass is skipped; overruns add a warning. `EstimatedCost` is now carried on the extraction result.
+
+### Removed
+- The unused `Tesseract` (native wrapper), `PDFsharp-MigraDoc` and `SkiaSharp` packages and the placeholder `OcrPdfTextExtractor`/`PdfPageRenderer`.
+
+### Added
 - ASP.NET Core Identity user store backed by PostgreSQL, replacing the in-memory `DevelopmentUserService`; the API can now start outside Development.
 - README: project origin note and project history section (hackathon version vs portfolio version).
 - This changelog.

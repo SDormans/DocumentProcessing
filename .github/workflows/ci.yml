@@ -31,6 +31,9 @@ jobs:
       - name: Build .NET
         run: dotnet build DocumentProcessing.slnx --configuration Release --no-restore
 
+      - name: Install OCR tools
+        run: sudo apt-get update -q && sudo apt-get install -y -q tesseract-ocr tesseract-ocr-nld poppler-utils
+
       - name: Test .NET
         run: dotnet test DocumentProcessing.slnx --configuration Release --no-build
 

@@ -45,6 +45,9 @@ public class InvoiceExtractionResult
     public int PageCount { get; set; }
     public int TotalCharacterCount { get; set; }
 
+    /// <summary>Estimated AI cost from the configured token prices; null when unknown.</summary>
+    public decimal? EstimatedCost { get; set; }
+
     public static InvoiceExtractionResult Empty() => new()
     {
         ExtractionMethod = "Unknown",

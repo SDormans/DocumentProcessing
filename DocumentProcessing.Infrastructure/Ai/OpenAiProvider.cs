@@ -55,7 +55,7 @@ public class OpenAiProvider : IAiProvider
             response.EnsureSuccessStatusCode();
 
             var completion = JsonNode.Parse(body);
-            RecordUsage(completion, activity);
+            var cost = RecordUsage(completion, activity);
 
             var choice = completion?["choices"] is JsonArray { Count: > 0 } choices ? choices[0] : null;
             var message = choice?["message"];
@@ -81,6 +81,7 @@ public class OpenAiProvider : IAiProvider
             }
 
             var result = InvoiceExtractionSchema.Parse(content);
+            result.EstimatedCost = cost;
             outcome = result.Success ? "success" : "schema_violation";
             return result;
         }
@@ -122,11 +123,11 @@ public class OpenAiProvider : IAiProvider
         }
     };
 
-    private void RecordUsage(JsonNode? completion, Activity? activity)
+    private decimal? RecordUsage(JsonNode? completion, Activity? activity)
     {
         var usage = completion?["usage"];
         if (usage is null)
-            return;
+            return null;
 
         var input = usage["prompt_tokens"]?.GetValue<long>() ?? 0;
         var output = usage["completion_tokens"]?.GetValue<long>() ?? 0;
@@ -145,6 +146,7 @@ public class OpenAiProvider : IAiProvider
         _logger.LogInformation(
             "AI request used {InputTokens} input and {OutputTokens} output tokens on {Model} (estimated cost {Cost}).",
             input, output, _options.ModelName, cost);
+        return cost;
     }
 
     internal static void ConfigureClient(HttpClient client, AiOptions options)

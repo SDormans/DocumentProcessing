@@ -2,6 +2,7 @@ using System.Text;
 using DocumentProcessing.Domain.Interfaces;
 using DocumentProcessing.Domain.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace DocumentProcessing.Application.Services.Invoice;
 
@@ -19,6 +20,7 @@ public class InvoiceExtractor : IInvoiceExtractor
     private readonly IAiProvider _aiProvider;
     private readonly ILogger<InvoiceExtractor> _logger;
     private readonly ValidationService _validationService;
+    private readonly decimal? _maxCost;
 
     public InvoiceExtractor(
         IDocumentRepository documentRepository,
@@ -26,8 +28,10 @@ public class InvoiceExtractor : IInvoiceExtractor
         IDocumentTextExtractor textExtractor,
         IAiProvider aiProvider,
         ILogger<InvoiceExtractor> logger,
-        ValidationService validationService)
+        ValidationService validationService,
+        IOptions<InvoiceExtractionOptions>? options = null)
     {
+        _maxCost = options?.Value.MaxCostPerDocument;
         _documentRepository = documentRepository;
         _fileStorage = fileStorage;
         _textExtractor = textExtractor;
@@ -106,12 +110,19 @@ public class InvoiceExtractor : IInvoiceExtractor
         using (ExtractionTelemetry.Stage(ExtractionTelemetry.LlmExtraction))
             result = await _aiProvider.ExtractAsync(BuildPrompt(text.FullText), cancellationToken);
         var version = 1;
+        var cost = result.EstimatedCost;
+        var budgetWarnings = new List<string>();
 
         if (result.Success)
         {
             await ValidateAsync(result, cancellationToken);
             var issues = GetFailingChecks().Select(e => e.Message).ToList();
-            if (allowCorrectionPass && issues.Count > 0)
+            if (allowCorrectionPass && issues.Count > 0 && cost >= _maxCost)
+            {
+                _logger.LogWarning("Skipping the correction pass for document {DocumentId}: cost {Cost} reached the budget {Budget}.", documentId, cost, _maxCost);
+                budgetWarnings.Add($"Correction pass skipped: the AI cost budget of {_maxCost} per document was reached.");
+            }
+            else if (allowCorrectionPass && issues.Count > 0)
             {
                 _logger.LogInformation("Validation failed for document {DocumentId}; running correction pass.", documentId);
                 InvoiceExtractionResult corrected;
@@ -121,6 +132,8 @@ public class InvoiceExtractor : IInvoiceExtractor
                     corrected = await _aiProvider.ExtractAsync(
                         BuildCorrectionPrompt(text.FullText, result.RawResponse ?? string.Empty, issues), cancellationToken);
                 }
+                if (corrected.EstimatedCost is { } correctionCost)
+                    cost = (cost ?? 0) + correctionCost;
                 if (corrected.Success)
                 {
                     result = corrected;
@@ -135,6 +148,16 @@ public class InvoiceExtractor : IInvoiceExtractor
         result.PageCount = text.PageCount;
         result.TotalCharacterCount = text.TotalCharacterCount;
         result.Warnings.AddRange(text.Warnings);
+        result.Warnings.AddRange(budgetWarnings);
+        result.EstimatedCost = cost;
+        if (cost > _maxCost)
+            result.Warnings.Add($"AI cost {cost:0.####} exceeded the per-document budget of {_maxCost}.");
+        if (text.FullText.Length > MaxPromptTextCharacters)
+        {
+            result.Warnings.Add(TruncationWarning(text.FullText.Length));
+            System.Diagnostics.Activity.Current?.SetTag("document.text_truncated", true);
+            _logger.LogWarning("Document {DocumentId} text ({Length} characters) was truncated to {Max} for the AI prompt.", documentId, text.FullText.Length, MaxPromptTextCharacters);
+        }
 
         if (result.Success)
         {
@@ -193,6 +216,9 @@ public class InvoiceExtractor : IInvoiceExtractor
         sb.AppendLine("Re-read the document and return a corrected extraction. Keep values that were correct.");
         return sb.ToString();
     }
+
+    public static string TruncationWarning(int length) =>
+        $"Document text was truncated: only the first {MaxPromptTextCharacters:N0} of {length:N0} characters were sent to the AI model. Check fields that appear late in the document.";
 
     private static string Truncate(string text) =>
         text.Length <= MaxPromptTextCharacters ? text : text[..MaxPromptTextCharacters];

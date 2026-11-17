@@ -47,6 +47,19 @@ Standard ASP.NET Core configuration: `appsettings*.json`, then environment varia
 | `QueueProcessing:MaxAttempts` | `3` | Queue-level attempts before `Failed` |
 | `QueueProcessing:BaseRetryDelay` | `00:00:30` | Exponential backoff base |
 
+## OCR (`Ocr:*`)
+
+| Key | Default | Notes |
+|---|---|---|
+| `Ocr:Enabled` | `true` | Pages with fewer than `MinNativeCharactersPerPage` (10) native characters are OCR'd |
+| `Ocr:Language` | `eng+nld` | Tesseract languages; the worker image installs `eng` and `nld` |
+| `Ocr:Dpi` | `300` | Render resolution |
+| `Ocr:MaxPages` | `20` | OCR'd pages per document; keep processing inside `QueueProcessing:LeaseDuration` |
+| `Ocr:PageTimeoutSeconds` | `60` | Per page, for rendering and for recognition |
+| `Ocr:TesseractPath`, `Ocr:PdftoppmPath` | `tesseract`, `pdftoppm` | Looked up on `PATH`; if missing, OCR is skipped with a warning |
+
+`Ai:MaxCostPerDocument` (default unset) is the per-document AI cost budget, in the currency of `Ai:InputCostPerMillionTokens`/`OutputCostPerMillionTokens`. Reaching it skips the correction pass.
+
 ## Docker Compose (`.env`)
 
 | Variable | Maps to |

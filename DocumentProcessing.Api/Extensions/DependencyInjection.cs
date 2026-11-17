@@ -44,7 +44,6 @@ public static class DependencyInjection
         services.AddScoped<IDocumentReviewService, DocumentReviewService>();
 
         services.AddScoped<ITextExtractionDetector, TextExtractionDetector>();
-        services.AddScoped<IOcrProvider, TesseractOcrProvider>();
         services.AddScoped<IDocumentTextExtractionService, DocumentTextExtractionService>();
 
         services.AddInvoiceExtraction(configuration);
