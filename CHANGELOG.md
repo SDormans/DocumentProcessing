@@ -24,6 +24,7 @@ All notable changes to this project are documented here.
 - Front-end tests (Vitest + Testing Library) and a Playwright browser smoke test of upload → review → approve, run by the new `e2e` CI job.
 
 ### Fixed
+- API startup no longer fails on the first refused PostgreSQL connection: it retries (`Database:ConnectAttempts`, default 10, every `Database:ConnectRetryDelay`, default 3 s) before migrating, then fails with an error naming the host and port.
 - Uploads over 1 MB failed through the web app with `413`: Nginx now allows `CLIENT_MAX_BODY_SIZE` (default `11m`, above the API's 10 MiB limit).
 - Saved corrections are returned by `GET /api/documents/{id}/review` (`correctedValue`, `approvedValue`, `effectiveValue`); corrections are merged with earlier ones and the audit log records the previous value.
 - Review actions on a missing or inaccessible document return `404` instead of `400` (the audit log too, instead of an empty `200`); decisions on a finished review return `409`.

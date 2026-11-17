@@ -22,13 +22,19 @@ public static class WebApplicationExtensions
         return endpoints;
     }
 
-    /// <summary>Applies pending EF Core migrations and seeds Identity roles and the bootstrap account.</summary>
+    /// <summary>
+    /// Waits for PostgreSQL, applies pending EF Core migrations and seeds Identity roles and the bootstrap account.
+    /// </summary>
     public static async Task MigrateDatabaseAsync(this WebApplication app)
     {
         using var scope = app.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        await MigrationBaseline.AdoptLegacyHistoryAsync(
-            dbContext, scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(MigrationBaseline)));
+        var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
+        var startupOptions = app.Configuration.GetSection(DatabaseStartupOptions.SectionName).Get<DatabaseStartupOptions>()
+            ?? new DatabaseStartupOptions();
+        await DatabaseStartup.WaitForServerAsync(
+            dbContext, startupOptions, loggerFactory.CreateLogger(nameof(DatabaseStartup)), app.Lifetime.ApplicationStopping);
+        await MigrationBaseline.AdoptLegacyHistoryAsync(dbContext, loggerFactory.CreateLogger(nameof(MigrationBaseline)));
         await dbContext.Database.MigrateAsync();
         await IdentitySeeder.SeedAsync(scope.ServiceProvider, app.Configuration);
     }
