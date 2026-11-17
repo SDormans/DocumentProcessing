@@ -1,3 +1,5 @@
+using DocumentProcessing.Domain.Interfaces;
+using DocumentProcessing.Application.Services;
 using System.Diagnostics;
 using System.Text.Json;
 using DocumentProcessing.Application.Services.Invoice;
@@ -30,6 +32,8 @@ public class QueueCommandProcessor
 
     private readonly AppDbContext _dbContext;
     private readonly IInvoiceExtractor _invoiceExtractor;
+    private readonly IMalwareScanner _malwareScanner;
+    private readonly IFileStorage _fileStorage;
     private readonly QueueProcessingOptions _options;
     private readonly ILogger<QueueCommandProcessor> _logger;
 
@@ -37,8 +41,12 @@ public class QueueCommandProcessor
         AppDbContext dbContext,
         IInvoiceExtractor invoiceExtractor,
         IOptions<QueueProcessingOptions> options,
-        ILogger<QueueCommandProcessor> logger)
+        ILogger<QueueCommandProcessor> logger,
+        IMalwareScanner malwareScanner,
+        IFileStorage fileStorage)
     {
+        _malwareScanner = malwareScanner;
+        _fileStorage = fileStorage;
         _dbContext = dbContext;
         _invoiceExtractor = invoiceExtractor;
         _options = options.Value;
@@ -127,6 +135,18 @@ public class QueueCommandProcessor
         InvoiceExtractionResult result;
         try
         {
+            MalwareScanResult scan;
+            await using (var content = await _fileStorage.OpenReadAsync(document.StorageKey, cancellationToken))
+                scan = await _malwareScanner.ScanAsync(content, cancellationToken);
+            if (!scan.IsClean)
+            {
+                _logger.LogWarning("Document {DocumentId} quarantined: malware scanner found {Signature}.", document.Id, scan.Signature);
+                document.UpdateStatus(DocumentStatus.Quarantined);
+                command.MarkFailed("MalwareDetected");
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                return QueueCommandOutcome.Failed;
+            }
+
             result = await _invoiceExtractor.ImproveAsync(document.Id, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

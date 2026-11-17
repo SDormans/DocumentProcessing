@@ -5,6 +5,7 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 ### Security
+- Malware scanning: the worker scans each file before parsing (`MalwareScanning:Provider=ClamAv`, `clamd` INSTREAM). Infected files become `Quarantined` and are never processed or served; an unreachable scanner retries instead of skipping the scan. Compose: `MALWARE_SCANNER=ClamAv docker compose --profile malware-scan up`.
 - Nginx sends Content-Security-Policy, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, and HSTS when reached over HTTPS; `server_tokens off`.
 - Forwarded headers are trusted only from `ForwardedHeaders:KnownProxies`/`KnownNetworks` (loopback when unset), also when `ASPNETCORE_FORWARDEDHEADERS_ENABLED` is used.
 - `CanApproveReject` checks every role claim (`RequireRole("Admin", "Reviewer")`), not just the first.

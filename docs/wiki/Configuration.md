@@ -48,6 +48,14 @@ Standard ASP.NET Core configuration: `appsettings*.json`, then environment varia
 | `QueueProcessing:MaxAttempts` | `3` | Queue-level attempts before `Failed` |
 | `QueueProcessing:BaseRetryDelay` | `00:00:30` | Exponential backoff base |
 
+## Malware scanning (`MalwareScanning:*`)
+
+| Key | Default | Notes |
+|---|---|---|
+| `MalwareScanning:Provider` | `None` | `ClamAv` in any shared environment. `None` skips scanning |
+| `MalwareScanning:ClamAvHost`, `ClamAvPort` | `clamav`, `3310` | `clamd` address |
+| `MalwareScanning:TimeoutSeconds` | `60` | Per file; a timeout is retried like any transient error |
+
 ## Docker Compose (`.env`)
 
 | Variable | Maps to |

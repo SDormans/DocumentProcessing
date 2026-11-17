@@ -18,6 +18,8 @@ public class QueueCommandProcessorTests : IDisposable
     private readonly string _dbName = Guid.NewGuid().ToString();
     private readonly AppDbContext _db;
     private readonly Mock<IInvoiceExtractor> _extractor = new();
+    private readonly Mock<DocumentProcessing.Application.Services.IMalwareScanner> _scanner = new();
+    private readonly Mock<DocumentProcessing.Domain.Interfaces.IFileStorage> _storage = new();
     private readonly QueueProcessingOptions _options = new() { MaxAttempts = 3, BaseRetryDelay = TimeSpan.FromSeconds(10) };
 
     public QueueCommandProcessorTests()
@@ -25,6 +27,36 @@ public class QueueCommandProcessorTests : IDisposable
         _db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(_dbName)
             .Options);
+        _storage.Setup(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(() => new MemoryStream());
+        _scanner.Setup(s => s.ScanAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(DocumentProcessing.Application.Services.MalwareScanResult.Clean);
+    }
+
+    [Fact]
+    public async Task Infected_file_is_quarantined_and_never_extracted()
+    {
+        _scanner.Setup(s => s.ScanAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(DocumentProcessing.Application.Services.MalwareScanResult.Infected("Eicar-Signature"));
+        var (document, command) = await SeedAsync();
+
+        var outcome = await Processor.ProcessAsync(command, CancellationToken.None);
+
+        outcome.Should().Be(QueueCommandOutcome.Failed);
+        (await _db.Documents.FindAsync(document.Id))!.Status.Should().Be(DocumentStatus.Quarantined);
+        _extractor.Verify(e => e.ImproveAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Unreachable_scanner_retries_instead_of_processing()
+    {
+        _scanner.Setup(s => s.ScanAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new System.Net.Sockets.SocketException());
+        var (_, command) = await SeedAsync();
+
+        var outcome = await Processor.ProcessAsync(command, CancellationToken.None);
+
+        outcome.Should().Be(QueueCommandOutcome.RetryScheduled);
+        _extractor.Verify(e => e.ImproveAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     private AppDbContext OtherWorkerContext() => new(new DbContextOptionsBuilder<AppDbContext>()
@@ -33,7 +65,7 @@ public class QueueCommandProcessorTests : IDisposable
 
     public void Dispose() => _db.Dispose();
 
-    private QueueCommandProcessor Processor => new(_db, _extractor.Object, Options.Create(_options), NullLogger<QueueCommandProcessor>.Instance);
+    private QueueCommandProcessor Processor => new(_db, _extractor.Object, Options.Create(_options), NullLogger<QueueCommandProcessor>.Instance, _scanner.Object, _storage.Object);
 
     private async Task<(Document Document, QueueCommand Command)> SeedAsync(DocumentStatus status = DocumentStatus.Queued, int claims = 1)
     {

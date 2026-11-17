@@ -124,7 +124,7 @@ public class DocumentService : IDocumentService
     public async Task<DocumentFileDto?> GetDocumentFileAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var document = await GetAccessibleDocumentAsync(id, cancellationToken);
-        if (document == null)
+        if (document == null || document.Status == DocumentStatus.Quarantined)
         {
             return null;
         }

@@ -76,6 +76,9 @@ services:
       Ai__Endpoint: ${AI_ENDPOINT:-https://api.openai.com/v1/}
       Ai__ApiKey: ${AI_API_KEY:-}
       Ai__ModelName: ${AI_MODEL:-gpt-4o-mini}
+      # ClamAv: start with `--profile malware-scan`; the worker retries until clamd is up (fail closed).
+      MalwareScanning__Provider: ${MALWARE_SCANNER:-None}
+      MalwareScanning__ClamAvHost: clamav
       Logging__Console__FormatterName: ${LOG_FORMAT:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     depends_on:
@@ -84,6 +87,11 @@ services:
         condition: service_healthy
     volumes:
       - document_storage_demo:/app/data/storage
+    restart: unless-stopped
+
+  clamav:
+    image: clamav/clamav:1.4
+    profiles: [malware-scan]
     restart: unless-stopped
 
   web:

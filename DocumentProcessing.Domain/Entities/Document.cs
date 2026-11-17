@@ -9,7 +9,10 @@ public enum DocumentStatus
     Processing,
     NeedsReview,
     Completed,
-    Failed
+    Failed,
+
+    /// <summary>The malware scanner flagged the file; it is never processed or served.</summary>
+    Quarantined
 }
 
 public class Document
@@ -113,6 +116,7 @@ public class Document
         (DocumentStatus.Processing, DocumentStatus.NeedsReview) => true,
         (DocumentStatus.Processing, DocumentStatus.Completed) => true,
         (DocumentStatus.Processing, DocumentStatus.Failed) => true,
+        (DocumentStatus.Processing, DocumentStatus.Quarantined) => true,
 
         (DocumentStatus.NeedsReview, DocumentStatus.Completed) => true,
         (DocumentStatus.NeedsReview, DocumentStatus.Failed) => true,
