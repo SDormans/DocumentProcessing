@@ -19,6 +19,7 @@ In Development, Swagger UI is available at `/swagger`.
 |---|---|---|---|
 | POST | `/api/documents` | Signed in; 20/min per user | `multipart/form-data`, field `file`. `201`, `400` validation, `413` too large |
 | GET | `/api/documents` | Signed in | Own documents; all for unrestricted roles. Query: `page` (1+), `pageSize` (1-200, default 50), `status`, `search` (file name). Total in `X-Total-Count`; `400` for bad values |
+| POST | `/api/documents/{id}/reprocess` | `IsAdmin` | Re-extract a `NeedsReview` document as a new result version. `202`, `404`, `409` |
 | GET | `/api/documents/export.csv` | Signed in | Approved values of completed documents you may see, one row per document |
 | GET | `/api/documents/{id}` | Signed in, owner | `404` if missing **or not yours** |
 | GET | `/api/documents/{id}/content` | Signed in, owner | The PDF |

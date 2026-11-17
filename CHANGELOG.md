@@ -6,6 +6,7 @@ All notable changes to this project are documented here.
 
 ### Added
 - Document list paging, status filter and file-name search: `GET /api/documents?page=&pageSize=&status=&search=` (page size 1-200, default 50) with the total in `X-Total-Count`. The web list has a search box, status filter and pager.
+- Reprocessing: admins can re-run extraction for a document awaiting review with `POST /api/documents/{id}/reprocess` (202/404/409); the result is stored as the next version.
 - CSV export: `GET /api/documents/export.csv` returns the approved values of every completed document the user may see (UTF-8 with BOM, formula-like cells prefixed with `'`).
 - Batch upload: the web upload accepts several PDFs and uploads them one by one, listing any that failed.
 

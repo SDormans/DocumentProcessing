@@ -121,6 +121,21 @@ public class DocumentService : IDocumentService
         return documents.Select(MapToDto).ToList();
     }
 
+    public async Task<ReprocessResult> ReprocessAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var document = await GetAccessibleDocumentAsync(id, cancellationToken);
+        if (document is null)
+            return ReprocessResult.NotFound;
+        if (document.Status != DocumentStatus.NeedsReview)
+            return ReprocessResult.NotReprocessable;
+
+        document.UpdateStatus(DocumentStatus.Queued);
+        await _processingQueue.EnqueueAsync(document.Id, cancellationToken);
+        await _documentRepository.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Document {DocumentId} queued for reprocessing by {UserId}.", id, _currentUser.UserId);
+        return ReprocessResult.Queued;
+    }
+
     public async Task<DocumentPage> GetDocumentPageAsync(DocumentQuery query, CancellationToken cancellationToken = default)
     {
         string? ownerId = null;

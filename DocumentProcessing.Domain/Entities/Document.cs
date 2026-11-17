@@ -116,6 +116,7 @@ public class Document
 
         (DocumentStatus.NeedsReview, DocumentStatus.Completed) => true,
         (DocumentStatus.NeedsReview, DocumentStatus.Failed) => true,
+        (DocumentStatus.NeedsReview, DocumentStatus.Queued) => true,
 
         // Allow reprocessing retry from Failed
         (DocumentStatus.Failed, DocumentStatus.Queued) => true,

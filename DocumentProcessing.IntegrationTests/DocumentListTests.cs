@@ -49,6 +49,30 @@ public class DocumentListTests(PostgresFixture postgres) : IAsyncLifetime
         (await alice.Http.GetAsync("/api/documents?pageSize=500")).StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    [Fact]
+    public async Task Admin_can_reprocess_a_document_awaiting_review_into_a_new_result_version()
+    {
+        using var alice = _factory.CreateApiClient();
+        (await alice.LoginAsync("alice", ReviewerPassword)).EnsureSuccessStatusCode();
+        await UploadAsync(alice, "acme.pdf");
+        await _factory.DrainQueueAsync();
+        var id = (await alice.Http.GetFromJsonAsync<JsonElement>("/api/documents"))[0].GetProperty("id").GetGuid();
+
+        (await alice.SendAsync(HttpMethod.Post, $"/api/documents/{id}/reprocess")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var admin = _factory.CreateApiClient();
+        (await admin.LoginAsync(ApiFactory.AdminUserName, ApiFactory.AdminPassword)).EnsureSuccessStatusCode();
+        (await admin.SendAsync(HttpMethod.Post, $"/api/documents/{id}/reprocess")).StatusCode.Should().Be(HttpStatusCode.Accepted);
+        (await admin.SendAsync(HttpMethod.Post, $"/api/documents/{id}/reprocess")).StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await admin.SendAsync(HttpMethod.Post, $"/api/documents/{Guid.NewGuid()}/reprocess")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        (await _factory.DrainQueueAsync()).Should().Equal(DocumentProcessing.Infrastructure.Queue.QueueCommandOutcome.Completed);
+        using var scope = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.CreateScope(_factory.Services);
+        var db = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<DocumentProcessing.Infrastructure.Data.AppDbContext>(scope.ServiceProvider);
+        db.InvoiceExtractionResults.Where(r => r.DocumentId == id).Select(r => r.ExtractionVersion).OrderBy(v => v).ToList()
+            .Should().Equal(1, 2);
+    }
+
     private static async Task UploadAsync(ApiClient client, string fileName)
     {
         var file = new ByteArrayContent(TestPdf.Create($"Invoice {fileName}"));

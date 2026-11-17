@@ -121,6 +121,22 @@ public class DocumentsController : ControllerBase
         return Ok(result.Items);
     }
 
+    /// <summary>Re-runs extraction for a document awaiting review (e.g. after a model or prompt change).</summary>
+    [HttpPost("{id:guid}/reprocess")]
+    [Authorize(Policy = "IsAdmin")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Reprocess(Guid id, CancellationToken cancellationToken)
+    {
+        return await _documentService.ReprocessAsync(id, cancellationToken) switch
+        {
+            ReprocessResult.Queued => Accepted(),
+            ReprocessResult.NotFound => NotFound(),
+            _ => Conflict(new { message = "Only documents awaiting review can be reprocessed." })
+        };
+    }
+
     /// <summary>Approved invoice values as CSV, for import into accounting.</summary>
     [HttpGet("export.csv")]
     [Produces("text/csv")]
