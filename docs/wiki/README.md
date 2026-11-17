@@ -13,7 +13,7 @@ Built with ASP.NET Core (.NET 10), EF Core with PostgreSQL, a React and TypeScri
 | Sign-in, roles, per-owner access | Works (ASP.NET Core Identity in PostgreSQL) |
 | Upload → queue → worker → review | Works end to end with the Fake AI provider |
 | Real LLM extraction | Implemented (OpenAI-compatible); no published accuracy yet |
-| Scanned PDFs (OCR) | Not wired up |
+| Scanned PDFs (OCR) | Works: Tesseract in the worker image; local runs need `tesseract` and `pdftoppm` on `PATH` |
 | Azure deployment | Workflow ready; not yet deployed |
 
 Known issues and planned work: [Roadmap](Roadmap.md).

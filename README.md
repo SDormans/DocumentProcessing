@@ -71,6 +71,7 @@ The API persists uploaded documents, stages a queue command with each upload, an
 - .NET 10 SDK for local builds and tests.
 - Node.js 24+ and npm for the web app and evaluation scripts.
 - Docker Engine with the Docker Compose plugin for the containerized demo.
+- Optional, for OCR of scanned PDFs when running the worker outside Docker: Tesseract (`tesseract`, with the `eng` and `nld` language data) and Poppler (`pdftoppm`) on `PATH`. The Compose `worker` image already includes them, so Tesseract is not a separate Compose service. Without them, the worker skips OCR with a warning and scanned PDFs fail with no text.
 
 ## Start the local Docker demo
 

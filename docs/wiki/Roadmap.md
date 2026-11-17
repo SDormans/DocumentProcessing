@@ -36,15 +36,16 @@ Exit criteria: an integration test per item, and a browser smoke test of upload 
 
 ## Milestone 2: real extraction, measured
 
-_On branch `milestone/2-real-extraction` (not merged yet): evaluation runner and nightly workflow, OCR, truncation warning, cost budget. The scored run (2.1/2.4) still needs an API key._
+_Merged into `master`: evaluation runner and nightly workflow, OCR, truncation warning, cost budget. The scored run (2.1/2.4) still needs an API key._
 
 | # | Item | Notes |
 |---|---|---|
 | 2.1 | Run `Ai:Provider=OpenAi` against OpenAI or Azure OpenAI on the 50-invoice synthetic corpus | Publish the scorecard (field accuracy, latency, cost per invoice) in the README. This replaces the "Planned" evaluation row |
 | 2.2 | Add an evaluation run to CI (manual or nightly, behind a secret) | Catch prompt/schema regressions |
-| 2.3 | OCR for scanned PDFs | `OcrPdfTextExtractor` exists but isn't registered, and the worker image has no Tesseract or tessdata. Either package Tesseract in the worker image, or send page images to a vision model |
+| 2.3 | OCR for scanned PDFs | Done: `HybridPdfTextExtractor` runs `TesseractCliOcrProvider` on pages without a text layer, and the worker image installs `tesseract-ocr` (`eng`, `nld`) and `poppler-utils` |
 | 2.4 | Choose a default model and cost budget | Use the existing token/cost metrics. Consider an alert when a document exceeds its budget |
 | 2.5 | Handle long documents | Prompt text is cut at `InvoiceExtractor.MaxPromptTextCharacters` (48k). Flag documents that hit the cut in validation |
+| 2.6 | Document the OCR pipeline and its requirements | The README used to say the Tesseract/PDF adapters exist but OCR isn't wired up: the invoice extractor methods were unimplemented, Compose didn't start the worker, and uploads stopped at `Uploaded`. Its requirements listed only .NET 10, Node 24+ and Docker, not Tesseract. Done: the README and wiki now describe the working pipeline, and the requirements list Tesseract and Poppler for worker runs outside Docker (the Compose `worker` image bundles them) |
 
 ## Milestone 3: first production deploy (Azure)
 
