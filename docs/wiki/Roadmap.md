@@ -20,7 +20,9 @@ sign-in, upload, worker processing to `NeedsReview`, correction, approve, audit 
 
 **Not verified yet:** a real LLM endpoint (only `Ai:Provider=Fake`, which returns empty fields), a real Azure deployment, the review UI in a browser.
 
-## Milestone 1: fix what's broken (next)
+## Milestone 1: fix what's broken
+
+_Implemented on branch `milestone/1-review-fixes` (not merged yet): all five items, with unit and integration tests per item, Vitest tests for the review form and a Playwright browser smoke test (`e2e` CI job)._
 
 | # | Item | Why | Where |
 |---|---|---|---|
@@ -78,6 +80,8 @@ _On branch `milestone/2-real-extraction` (not merged yet): evaluation runner and
 - Consistent language in the UI and API messages (currently mixed Dutch/English), or i18n.
 
 ## Continuous: tech debt and hygiene
+
+_On branch `milestone/0-tech-debt` (not merged yet): package alignment, warning fixes with `TreatWarningsAsErrors`, official PdfPig, quieter worker logs and the `libgssapi_krb5` fix, README refresh, Dependabot. Frontend tests and the Playwright smoke test are on `milestone/1-review-fixes`._
 
 - Align package versions on .NET 10: EF Core, Identity and `Npgsql.EntityFrameworkCore.PostgreSQL` are 9.0.0, while `Npgsql` is 10.0.0.
 - Remove the duplicate `Microsoft.EntityFrameworkCore.InMemory` reference (NU1504) and the obsolete `PostgreSqlBuilder()` constructor (CS0618). Then turn on `TreatWarningsAsErrors`.

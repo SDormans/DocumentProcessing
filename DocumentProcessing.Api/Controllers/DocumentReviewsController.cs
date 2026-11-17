@@ -54,7 +54,9 @@ public class DocumentReviewsController : ControllerBase
     [Authorize(Policy = "CanReviewDocuments")]
     [ProducesResponseType(typeof(ReviewActionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ReviewActionResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ReviewActionResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> SubmitCorrections(
         Guid documentId,
         [FromBody] SubmitCorrectionsRequest request,
@@ -63,11 +65,7 @@ public class DocumentReviewsController : ControllerBase
         var response = await _reviewService.SubmitCorrectionsAsync(
             documentId, request, CurrentUserId, CurrentUserName, cancellationToken);
 
-        if (!response.Success)
-        {
-            return BadRequest(response);
-        }
-        return Ok(response);
+        return ToActionResult(response);
     }
 
     /// <summary>
@@ -78,7 +76,9 @@ public class DocumentReviewsController : ControllerBase
     [Authorize(Policy = "CanApproveReject")]
     [ProducesResponseType(typeof(ReviewActionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ReviewActionResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ReviewActionResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Approve(
         Guid documentId,
         [FromBody] ApproveRequest? request,
@@ -87,11 +87,7 @@ public class DocumentReviewsController : ControllerBase
         var response = await _reviewService.ApproveAsync(
             documentId, request ?? new ApproveRequest(), CurrentUserId, CurrentUserName, cancellationToken);
 
-        if (!response.Success)
-        {
-            return BadRequest(response);
-        }
-        return Ok(response);
+        return ToActionResult(response);
     }
 
     /// <summary>
@@ -102,7 +98,9 @@ public class DocumentReviewsController : ControllerBase
     [Authorize(Policy = "CanApproveReject")]
     [ProducesResponseType(typeof(ReviewActionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ReviewActionResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ReviewActionResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Reject(
         Guid documentId,
         [FromBody] RejectRequest request,
@@ -111,11 +109,7 @@ public class DocumentReviewsController : ControllerBase
         var response = await _reviewService.RejectAsync(
             documentId, request, CurrentUserId, CurrentUserName, cancellationToken);
 
-        if (!response.Success)
-        {
-            return BadRequest(response);
-        }
-        return Ok(response);
+        return ToActionResult(response);
     }
 
     /// <summary>
@@ -127,6 +121,19 @@ public class DocumentReviewsController : ControllerBase
     public async Task<IActionResult> GetAuditLog(Guid documentId, CancellationToken cancellationToken)
     {
         var log = await _reviewService.GetAuditLogAsync(documentId, cancellationToken);
+        if (log == null)
+        {
+            return NotFound(new { message = "Document niet gevonden." });
+        }
         return Ok(log);
     }
+
+    private IActionResult ToActionResult(ReviewActionResponse response) => response.Error switch
+    {
+        _ when response.Success => Ok(response),
+        ReviewActionError.NotFound => NotFound(response),
+        ReviewActionError.Forbidden => StatusCode(StatusCodes.Status403Forbidden, response),
+        ReviewActionError.Conflict => Conflict(response),
+        _ => BadRequest(response)
+    };
 }

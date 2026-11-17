@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 
 COPY DocumentProcessing.Domain/DocumentProcessing.Domain.csproj DocumentProcessing.Domain/
@@ -21,7 +21,8 @@ FROM mcr.microsoft.com/dotnet/runtime:10.0-alpine AS runtime
 WORKDIR /app
 COPY --from=build --chown=app:app /app/publish .
 # OCR for scanned PDFs: pdftoppm renders pages, tesseract reads them (English + Dutch).
-RUN apk add --no-cache poppler-utils tesseract-ocr tesseract-ocr-data-eng tesseract-ocr-data-nld
+# krb5-libs: Npgsql probes for GSSAPI at startup and logs an error when libgssapi_krb5.so.2 is missing.
+RUN apk add --no-cache krb5-libs poppler-utils tesseract-ocr tesseract-ocr-data-eng tesseract-ocr-data-nld
 RUN mkdir -p /app/data/storage && chown -R app:app /app/data
 USER app
 ENTRYPOINT ["dotnet", "DocumentProcessing.Worker.dll"]

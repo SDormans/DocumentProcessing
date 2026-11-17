@@ -62,6 +62,11 @@ public class QueueCommandRepository : IQueueCommandRepository
             .ToListAsync(cancellationToken);
     }
 
+    public Task<int> PurgeCompletedAsync(DateTime completedBeforeUtc, CancellationToken cancellationToken = default) =>
+        _dbContext.QueueCommands
+            .Where(c => c.Status == QueueCommandStatus.Completed && c.CompletedAtUtc < completedBeforeUtc)
+            .ExecuteDeleteAsync(cancellationToken);
+
     public async Task AddAsync(QueueCommand command, CancellationToken cancellationToken = default)
     {
         await _dbContext.QueueCommands.AddAsync(command, cancellationToken);

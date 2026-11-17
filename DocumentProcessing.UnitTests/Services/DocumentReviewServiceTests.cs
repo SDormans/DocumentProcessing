@@ -49,9 +49,108 @@ public class DocumentReviewServiceTests
         _added.Should().NotBeNull();
         _added!.Status.Should().Be(ReviewStatus.Approved);
         _added.OriginalAiOutputJson.Should().Contain("Acme");
-        _added.ApprovedValuesJson.Should().Be(_added.OriginalAiOutputJson);
+        _added.ApprovedValuesJson.Should().Contain("\"SupplierName\":\"Acme\"");
         _document.Status.Should().Be(DocumentStatus.Completed);
     }
+
+    [Fact]
+    public async Task Approve_ValidatesTheCorrectedValues_NotTheOriginalExtraction()
+    {
+        var review = new DocumentReview(Guid.NewGuid(), _document.Id, "{}");
+        review.SetCorrections("{\"SupplierName\":\"\"}", "user-1");
+        _reviews.Setup(r => r.GetByDocumentIdAsync(_document.Id, It.IsAny<CancellationToken>())).ReturnsAsync(review);
+        var service = ServiceWith(new MissingRequiredFieldsValidationRule(new[] { "SupplierName" }));
+
+        var response = await service.ApproveAsync(_document.Id, new ApproveRequest(), "user-1", "reviewer");
+
+        response.Success.Should().BeFalse();
+        response.Error.Should().Be(ReviewActionError.Invalid);
+        response.Errors.Should().ContainSingle().Which.Should().Contain("SupplierName");
+        review.Status.Should().Be(ReviewStatus.Corrected);
+        _document.Status.Should().Be(DocumentStatus.NeedsReview);
+    }
+
+    [Fact]
+    public async Task Approve_SucceedsWhenCorrectionsFixTheValidationErrors()
+    {
+        _results.Setup(r => r.GetByDocumentIdAsync(_document.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new InvoiceExtractionResultEntity { DocumentId = _document.Id, ExtractionVersion = 1 });
+        var review = new DocumentReview(Guid.NewGuid(), _document.Id, "{}");
+        review.SetCorrections("{\"SupplierName\":\"Acme\"}", "user-1");
+        _reviews.Setup(r => r.GetByDocumentIdAsync(_document.Id, It.IsAny<CancellationToken>())).ReturnsAsync(review);
+
+        var response = await ServiceWith(new MissingRequiredFieldsValidationRule(new[] { "SupplierName" })).ApproveAsync(_document.Id, new ApproveRequest(), "user-1", "reviewer");
+
+        response.Success.Should().BeTrue();
+        review.ApprovedValuesJson.Should().Contain("\"SupplierName\":\"Acme\"");
+    }
+
+    [Fact]
+    public async Task Corrections_AreMergedWithEarlierOnes_AndShownInTheDetail()
+    {
+        var review = new DocumentReview(Guid.NewGuid(), _document.Id, "{}");
+        _reviews.Setup(r => r.GetByDocumentIdAsync(_document.Id, It.IsAny<CancellationToken>())).ReturnsAsync(review);
+
+        (await Service.SubmitCorrectionsAsync(_document.Id, Corrections(("InvoiceNumber", "INV-1")), "user-1", "reviewer")).Success.Should().BeTrue();
+        (await Service.SubmitCorrectionsAsync(_document.Id, Corrections(("TotalAmount", "121.5")), "user-1", "reviewer")).Success.Should().BeTrue();
+
+        var detail = await Service.GetDocumentDetailAsync(_document.Id);
+        var fields = detail!.ExtractedFields.ToDictionary(f => f.FieldName);
+        fields.Keys.Should().Equal(ReviewFields.Names);
+        fields["SupplierName"].EffectiveValue.Should().Be("Acme");
+        fields["SupplierName"].IsCorrected.Should().BeFalse();
+        fields["InvoiceNumber"].CorrectedValue.Should().Be("INV-1");
+        fields["InvoiceNumber"].IsCorrected.Should().BeTrue();
+        fields["TotalAmount"].EffectiveValue.Should().Be("121.5");
+    }
+
+    [Theory]
+    [InlineData("Unknown", "x", "Unknown field")]
+    [InlineData("InvoiceDate", "01-10-2026", "yyyy-MM-dd")]
+    [InlineData("TotalAmount", "12,50", "number")]
+    [InlineData("Currency", "Euro", "currency code")]
+    public async Task Corrections_WithInvalidValues_AreRejectedWithoutSaving(string field, string value, string expectedError)
+    {
+        var response = await Service.SubmitCorrectionsAsync(_document.Id, Corrections((field, value)), "user-1", "reviewer");
+
+        response.Success.Should().BeFalse();
+        response.Error.Should().Be(ReviewActionError.Invalid);
+        response.Errors.Should().ContainSingle().Which.Should().Contain(expectedError);
+        _added.Should().BeNull();
+        _reviews.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Corrections_LongerThanTheLimit_AreRejected()
+    {
+        var response = await Service.SubmitCorrectionsAsync(
+            _document.Id, Corrections(("SupplierName", new string('x', ReviewFields.MaxValueLength + 1))), "user-1", "reviewer");
+
+        response.Error.Should().Be(ReviewActionError.Invalid);
+    }
+
+    [Fact]
+    public async Task Actions_OnMissingDocument_AreReportedAsNotFound()
+    {
+        var missing = Guid.NewGuid();
+
+        (await Service.ApproveAsync(missing, new ApproveRequest(), "user-1", "reviewer")).Error.Should().Be(ReviewActionError.NotFound);
+        (await Service.RejectAsync(missing, new RejectRequest { Reason = "x" }, "user-1", "reviewer")).Error.Should().Be(ReviewActionError.NotFound);
+        (await Service.SubmitCorrectionsAsync(missing, Corrections(("SupplierName", "x")), "user-1", "reviewer")).Error.Should().Be(ReviewActionError.NotFound);
+        (await Service.GetAuditLogAsync(missing)).Should().BeNull();
+    }
+
+    private static SubmitCorrectionsRequest Corrections(params (string Field, string Value)[] values) =>
+        new() { CorrectedValues = values.ToDictionary(v => v.Field, v => v.Value) };
+
+    private DocumentReviewService ServiceWith(params IInvoiceValidationRule[] rules) => new(
+        _documents.Object,
+        _reviews.Object,
+        Mock.Of<IFileStorage>(),
+        _results.Object,
+        new ValidationService(rules),
+        NullLogger<DocumentReviewService>.Instance,
+        Mock.Of<ICurrentUser>(u => u.HasUnrestrictedDocumentAccess));
 
     [Fact]
     public async Task Reject_WithoutPriorCorrections_CreatesReview()

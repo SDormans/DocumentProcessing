@@ -77,6 +77,8 @@ services:
       Ai__ApiKey: ${AI_API_KEY:-}
       Ai__ModelName: ${AI_MODEL:-gpt-4o-mini}
       Logging__Console__FormatterName: ${LOG_FORMAT:-}
+      # The worker polls the queue every few seconds; don't log each SQL command.
+      Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: ${WORKER_SQL_LOG_LEVEL:-Warning}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     depends_on:
       # The API applies migrations on startup; wait for it before polling the queue.
@@ -90,6 +92,9 @@ services:
     build:
       context: DocumentProcessing.Web
       dockerfile: Dockerfile
+    environment:
+      # Keep above MAX_FILE_SIZE_BYTES + 128 KiB multipart overhead.
+      CLIENT_MAX_BODY_SIZE: ${CLIENT_MAX_BODY_SIZE:-11m}
     depends_on:
       api:
         condition: service_healthy
