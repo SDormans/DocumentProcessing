@@ -121,6 +121,17 @@ public class DocumentsController : ControllerBase
         return Ok(result.Items);
     }
 
+    /// <summary>Approved invoice values as CSV, for import into accounting.</summary>
+    [HttpGet("export.csv")]
+    [Produces("text/csv")]
+    public async Task<IActionResult> ExportApproved(
+        [FromServices] IDocumentReviewService reviewService, CancellationToken cancellationToken)
+    {
+        var csv = await reviewService.ExportApprovedCsvAsync(cancellationToken);
+        return File(System.Text.Encoding.UTF8.GetPreamble().Concat(System.Text.Encoding.UTF8.GetBytes(csv)).ToArray(),
+            "text/csv; charset=utf-8", "approved-invoices.csv");
+    }
+
     private const int DefaultPageSize = 50;
     private const int MaxPageSize = 200;
 

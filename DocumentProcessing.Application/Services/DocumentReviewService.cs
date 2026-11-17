@@ -567,4 +567,44 @@ public class DocumentReviewService : IDocumentReviewService
             TotalCharacterCount = entity.TotalCharacterCount
         };
     }
+
+    public async Task<string> ExportApprovedCsvAsync(CancellationToken cancellationToken = default)
+    {
+        string? ownerId = null;
+        if (!_currentUser.HasUnrestrictedDocumentAccess)
+        {
+            if (string.IsNullOrEmpty(_currentUser.UserId))
+                return ToCsvRow(ExportHeader()) + "\r\n";
+            ownerId = _currentUser.UserId;
+        }
+
+        var (documents, _) = await _documentRepository.QueryAsync(
+            new Domain.Interfaces.DocumentQuery(Domain.Entities.DocumentStatus.Completed, null, 0, 10_000), ownerId, cancellationToken);
+        var csv = new System.Text.StringBuilder(ToCsvRow(ExportHeader())).Append("\r\n");
+        foreach (var document in documents)
+        {
+            var review = await _reviewRepository.GetByDocumentIdAsync(document.Id, cancellationToken);
+            if (review?.Status != Domain.Enums.ReviewStatus.Approved)
+                continue;
+            var values = ReviewFields.Parse(review.ApprovedValuesJson);
+            var row = new List<string?> { document.Id.ToString(), document.OriginalFileName, review.ReviewedAtUtc?.ToString("O"), review.ReviewedBy };
+            row.AddRange(ReviewFields.Names.Select(name => values.GetValueOrDefault(name)));
+            csv.Append(ToCsvRow(row)).Append("\r\n");
+        }
+        return csv.ToString();
+    }
+
+    private static List<string?> ExportHeader() =>
+        new List<string?> { "DocumentId", "FileName", "ReviewedAtUtc", "ReviewedBy" }.Concat(ReviewFields.Names).ToList();
+
+    private static string ToCsvRow(IEnumerable<string?> values) => string.Join(",", values.Select(EscapeCsv));
+
+    internal static string EscapeCsv(string? value)
+    {
+        value ??= string.Empty;
+        // Stop spreadsheet apps from running a cell as a formula (CSV injection).
+        if (value.Length > 0 && "=+-@\t\r".Contains(value[0]))
+            value = "'" + value;
+        return value.IndexOfAny([',', '"', '\n', '\r']) >= 0 ? $"\"{value.Replace("\"", "\"\"")}\"" : value;
+    }
 }

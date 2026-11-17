@@ -57,4 +57,7 @@ public interface IDocumentReviewService
     /// Whether the signed-in user may approve or reject documents.
     /// </summary>
     Task<bool> CanApproveOrRejectAsync(string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>CSV of the approved values of every completed document the user may see (newest first, max 10,000).</summary>
+    Task<string> ExportApprovedCsvAsync(CancellationToken cancellationToken = default);
 }

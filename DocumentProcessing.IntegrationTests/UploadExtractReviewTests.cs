@@ -63,6 +63,12 @@ public class UploadExtractReviewTests(PostgresFixture postgres) : IAsyncLifetime
 
         var audit = await alice.Http.GetFromJsonAsync<JsonElement>($"/api/documents/{id}/review/audit-log");
         audit.GetArrayLength().Should().BeGreaterThan(0);
+
+        var csv = await alice.Http.GetStringAsync("/api/documents/export.csv");
+        csv.Should().StartWith("DocumentId,FileName,ReviewedAtUtc,ReviewedBy,");
+        csv.Should().Contain(id.ToString()).And.Contain("INV-2026-001-A");
+        using var bob = await SignInAsync("bob");
+        (await bob.Http.GetStringAsync("/api/documents/export.csv")).Should().NotContain(id.ToString());
     }
 
     [Fact]
