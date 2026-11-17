@@ -17,7 +17,7 @@ RUN dotnet publish DocumentProcessing.Api/DocumentProcessing.Api.csproj \
     --output /app/publish \
     /p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:11.0-alpine AS runtime
 WORKDIR /app
 COPY --from=build --chown=app:app /app/publish .
 # krb5-libs: Npgsql probes for GSSAPI at startup and logs an error when libgssapi_krb5.so.2 is missing.
