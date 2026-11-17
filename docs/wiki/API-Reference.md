@@ -13,6 +13,8 @@ In Development, Swagger UI is available at `/swagger`.
 | GET | `/api/auth/me` | Signed in | Current user and roles; refreshes `XSRF-TOKEN` |
 | POST | `/api/auth/register` | `IsAdmin` | `{ "username", "password", "email", "role" }` (`role`: `Admin` or `Reviewer`) |
 
+Two-factor sign-in: `POST /api/auth/mfa/setup` (signed in) returns `sharedKey` and `authenticatorUri`; `POST /api/auth/mfa/enable` with `{ "code": "123456" }` returns `204` or `400`. Once enabled, `POST /api/auth/login` without `twoFactorCode` returns `401` with `requiresTwoFactor: true`.
+
 ## Documents
 
 | Method | Path | Access | Notes |

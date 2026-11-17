@@ -21,7 +21,7 @@ builder.Services
     .AddApiRateLimiting(builder.Configuration)
     .AddApiAntiforgery(builder.Environment)
     .AddCookieAuthentication(builder.Environment)
-    .AddAuthorizationPolicies()
+    .AddAuthorizationPolicies(builder.Configuration.GetValue<bool>("Authentication:RequireAdminMfa"))
     .AddTrustedForwardedHeaders(builder.Configuration);
 
 builder.Services.AddControllers(options => options.Filters.Add<ValidateAntiforgeryOnUnsafeMethodsFilter>());

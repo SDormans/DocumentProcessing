@@ -64,6 +64,8 @@ Standard ASP.NET Core configuration: `appsettings*.json`, then environment varia
 | `Retention:PurgeInterval` | `01:00:00` | How often the worker deletes expired documents |
 | `Retention:PurgeBatchSize` | `100` | Documents deleted per run |
 
+`Authentication:RequireAdminMfa` (default `false`): when `true`, admin endpoints (`IsAdmin`) need a session signed in with an authenticator code. Set it in every shared environment once the admins have enrolled.
+
 ## Docker Compose (`.env`)
 
 | Variable | Maps to |

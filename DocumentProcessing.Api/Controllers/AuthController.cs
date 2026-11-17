@@ -55,6 +55,19 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Ongeldige gebruikersnaam of wachtwoord." });
         }
 
+        var usedMfa = false;
+        if (await _userService.IsTwoFactorEnabledAsync(user.UserId, cancellationToken))
+        {
+            if (string.IsNullOrWhiteSpace(request.TwoFactorCode))
+                return Unauthorized(new { message = "Two-factor code required.", requiresTwoFactor = true });
+            if (!await _userService.VerifyTwoFactorCodeAsync(user.UserId, request.TwoFactorCode, cancellationToken))
+            {
+                _logger.LogWarning("Two-factor code rejected for user {UserId}.", user.UserId);
+                return Unauthorized(new { message = "Invalid two-factor code.", requiresTwoFactor = true });
+            }
+            usedMfa = true;
+        }
+
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, user.UserId),
@@ -62,6 +75,9 @@ public class AuthController : ControllerBase
             new(ClaimTypes.Email, user.Email),
             new(ClaimTypes.Role, user.Role)
         };
+
+        if (usedMfa)
+            claims.Add(new Claim(AuthSetup.MfaClaimType, AuthSetup.MfaClaimValue));
 
         foreach (var role in user.Roles)
         {
@@ -81,6 +97,30 @@ public class AuthController : ControllerBase
         _logger.LogInformation("User {UserId} signed in.", user.UserId);
 
         return Ok(user);
+    }
+
+    /// <summary>Starts authenticator-app enrolment: returns a new key. Two-factor sign-in is off until enabled.</summary>
+    [HttpPost("mfa/setup")]
+    [Authorize]
+    [ProducesResponseType(typeof(AuthenticatorSetup), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SetupTwoFactor(CancellationToken cancellationToken)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+        return Ok(await _userService.ResetAuthenticatorAsync(userId, "DocumentProcessing", cancellationToken));
+    }
+
+    /// <summary>Confirms enrolment with a code from the app; later sign-ins then need a code.</summary>
+    [HttpPost("mfa/enable")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> EnableTwoFactor([FromBody] EnableTwoFactorRequest request, CancellationToken cancellationToken)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+        if (!await _userService.EnableTwoFactorAsync(userId, request.Code, cancellationToken))
+            return BadRequest(new { message = "Invalid two-factor code." });
+        _logger.LogInformation("User {UserId} enabled two-factor sign-in.", userId);
+        return NoContent();
     }
 
     /// <summary>
@@ -176,6 +216,14 @@ public class LoginRequest
 {
     public string Username { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
+
+    /// <summary>Authenticator-app code; required once two-factor sign-in is enabled.</summary>
+    public string? TwoFactorCode { get; set; }
+}
+
+public class EnableTwoFactorRequest
+{
+    public string Code { get; set; } = string.Empty;
 }
 
 public class RegisterRequest

@@ -5,6 +5,7 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 ### Security
+- Two-factor sign-in with an authenticator app (TOTP): `POST /api/auth/mfa/setup` returns a key and `otpauth://` URI, `POST /api/auth/mfa/enable` confirms it; afterwards login needs `twoFactorCode`. `Authentication:RequireAdminMfa=true` makes admin endpoints require a session signed in with a code. Decision recorded in ADR 0007.
 - Retention and deletion: approving a document sets `RetainUntilUtc` (`Retention:CompletedDocumentRetention`, default 7 years); the worker deletes expired documents hourly. Admins can erase a document with `DELETE /api/documents/{id}` (204/404). Both delete the stored file, text extractions, queue commands, results, review and audit trail, and log only the id and reason. Migration `AddDocumentRetention`.
 - Malware scanning: the worker scans each file before parsing (`MalwareScanning:Provider=ClamAv`, `clamd` INSTREAM). Infected files become `Quarantined` and are never processed or served; an unreachable scanner retries instead of skipping the scan. Compose: `MALWARE_SCANNER=ClamAv docker compose --profile malware-scan up`.
 - Nginx sends Content-Security-Policy, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, and HSTS when reached over HTTPS; `server_tokens off`.
