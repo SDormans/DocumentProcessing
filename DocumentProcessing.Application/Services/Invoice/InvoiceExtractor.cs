@@ -129,17 +129,21 @@ public class InvoiceExtractor : IInvoiceExtractor
             {
                 _logger.LogInformation("Validation failed for document {DocumentId}; running correction pass.", documentId);
                 InvoiceExtractionResult corrected;
+                AiModelType correctionModelType;
+                var correctionWarnings = new List<string>();
                 using (var stage = ExtractionTelemetry.Stage(ExtractionTelemetry.LlmExtraction))
                 {
                     stage.Activity?.SetTag("extraction.correction_pass", true);
-                    corrected = await _aiProviders.Get(modelType).ExtractAsync(
-                        BuildCorrectionPrompt(text.FullText, result.RawResponse ?? string.Empty, issues), cancellationToken);
+                    (corrected, correctionModelType) = await CallModelAsync(modelType,
+                        BuildCorrectionPrompt(text.FullText, result.RawResponse ?? string.Empty, issues), correctionWarnings, cancellationToken);
                 }
                 if (corrected.EstimatedCost is { } correctionCost)
                     cost = (cost ?? 0) + correctionCost;
                 if (corrected.Success)
                 {
                     result = corrected;
+                    modelType = correctionModelType;
+                    budgetWarnings.AddRange(correctionWarnings);
                     version = 2;
                     await ValidateAsync(result, cancellationToken);
                 }

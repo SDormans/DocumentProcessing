@@ -134,6 +134,28 @@ public class ModelSwitchingTests
     }
 
     [Fact]
+    public async Task Automatic_fallback_also_covers_the_correction_pass()
+    {
+        var calls = 0;
+        _cloud.Setup(p => p.ExtractAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns<string, CancellationToken>((_, _) => ++calls == 1
+                ? Task.FromResult(InvoiceExtractionResult.SuccessResult("{}", new InvoiceExtractionResult()))
+                : throw new HttpRequestException("HTTP 503"));
+        Succeeds(_local);
+        var extractor = new InvoiceExtractor(
+            _repository.Object, _storage.Object, _textExtractor.Object, Both(AiFallbackMode.Automatic),
+            NullLogger<InvoiceExtractor>.Instance,
+            new ValidationService(new IInvoiceValidationRule[] { new MissingRequiredFieldsValidationRule() }));
+
+        var result = await extractor.ImproveAsync(_document.Id);
+
+        result.Success.Should().BeTrue();
+        result.ExtractionVersion.Should().Be(2);
+        result.ModelType.Should().Be(AiModelType.Local);
+        result.Warnings.Should().Contain(w => w.StartsWith("Processed with the Local model (local-model) because the Cloud model failed"));
+    }
+
+    [Fact]
     public async Task Cancellation_is_not_treated_as_a_model_failure()
     {
         using var cts = new CancellationTokenSource();
