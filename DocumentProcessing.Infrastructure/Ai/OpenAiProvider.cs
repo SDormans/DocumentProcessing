@@ -69,20 +69,20 @@ public class OpenAiProvider : IAiProvider
             if (!string.IsNullOrWhiteSpace(refusal))
             {
                 outcome = "refused";
-                return InvoiceExtractionResult.FailureResult($"AI provider refused: {refusal}", body);
+                return WithCost(InvoiceExtractionResult.FailureResult($"AI provider refused: {refusal}", body), cost);
             }
 
             if (finishReason == "length")
             {
                 outcome = "truncated";
-                return InvoiceExtractionResult.FailureResult("AI response was truncated (max output tokens reached).", body);
+                return WithCost(InvoiceExtractionResult.FailureResult("AI response was truncated (max output tokens reached).", body), cost);
             }
 
             var content = message?["content"]?.GetValue<string>();
             if (string.IsNullOrWhiteSpace(content))
             {
                 outcome = "empty";
-                return InvoiceExtractionResult.FailureResult("AI response did not contain any content.", body);
+                return WithCost(InvoiceExtractionResult.FailureResult("AI response did not contain any content.", body), cost);
             }
 
             var result = InvoiceExtractionSchema.Parse(content);
@@ -127,6 +127,12 @@ public class OpenAiProvider : IAiProvider
             }
         }
     };
+
+    private static InvoiceExtractionResult WithCost(InvoiceExtractionResult result, decimal? cost)
+    {
+        result.EstimatedCost = cost;
+        return result;
+    }
 
     private decimal? RecordUsage(JsonNode? completion, Activity? activity)
     {

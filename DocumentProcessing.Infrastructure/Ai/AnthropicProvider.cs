@@ -53,7 +53,7 @@ public class AnthropicProvider : IAiProvider
             if (message?["stop_reason"]?.GetValue<string>() == "max_tokens")
             {
                 outcome = "truncated";
-                return InvoiceExtractionResult.FailureResult("AI response was truncated (max output tokens reached).", body);
+                return WithCost(InvoiceExtractionResult.FailureResult("AI response was truncated (max output tokens reached).", body), cost);
             }
 
             var toolInput = (message?["content"] as JsonArray)?
@@ -61,7 +61,7 @@ public class AnthropicProvider : IAiProvider
             if (toolInput is null)
             {
                 outcome = "empty";
-                return InvoiceExtractionResult.FailureResult("AI response did not contain the structured invoice data.", body);
+                return WithCost(InvoiceExtractionResult.FailureResult("AI response did not contain the structured invoice data.", body), cost);
             }
 
             var result = InvoiceExtractionSchema.Parse(toolInput.ToJsonString());
@@ -97,6 +97,12 @@ public class AnthropicProvider : IAiProvider
         },
         tool_choice = new { type = "tool", name = ToolName }
     };
+
+    private static InvoiceExtractionResult WithCost(InvoiceExtractionResult result, decimal? cost)
+    {
+        result.EstimatedCost = cost;
+        return result;
+    }
 
     private decimal? RecordUsage(JsonNode? message, Activity? activity)
     {

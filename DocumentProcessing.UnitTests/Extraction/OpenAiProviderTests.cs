@@ -102,6 +102,27 @@ public class OpenAiProviderTests
         (await provider.ExtractAsync("prompt")).Success.Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(null, "stop", "cannot help")]
+    [InlineData("{\"supplierName\":", "length", null)]
+    [InlineData("", "stop", null)]
+    public async Task ExtractAsync_FailedResponse_StillReportsTheBilledCost(string? content, string finishReason, string? refusal)
+    {
+        var options = new AiOptions
+        {
+            Provider = "OpenAI", ApiKey = "test-key", Endpoint = "https://llm.example/v1",
+            InputCostPerMillionTokens = 1m, OutputCostPerMillionTokens = 10m
+        };
+        var client = new HttpClient(new StubHandler(HttpStatusCode.OK, Completion(content, finishReason, refusal)));
+        OpenAiProvider.ConfigureClient(client, options);
+        var provider = new OpenAiProvider(client, Options.Create(options), NullLogger<OpenAiProvider>.Instance);
+
+        var result = await provider.ExtractAsync("prompt");
+
+        result.Success.Should().BeFalse();
+        result.EstimatedCost.Should().Be(0.003m);
+    }
+
     [Fact]
     public async Task ExtractAsync_ServerError_Throws()
     {
