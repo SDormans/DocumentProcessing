@@ -88,3 +88,6 @@ Thumbs.db
 # Playwright
 DocumentProcessing.Web/test-results/
 DocumentProcessing.Web/playwright-report/
+
+# Test fixtures are committed on purpose.
+!DocumentProcessing.UnitTests/Fixtures/*.pdf
