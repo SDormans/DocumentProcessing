@@ -20,6 +20,7 @@ All notable changes to this project are documented here.
 - Project wiki in `docs/wiki/` (architecture, configuration, API, security, deployment, troubleshooting, roadmap).
 
 ### Changed
+- ADRs 0003–0006 record the Identity, repository, AI provider and migration-baseline decisions.
 - The worker deletes completed queue commands after `QueueProcessing:CompletedRetention` (default 30 days, checked every `PurgeInterval`, default 1 hour); failed commands are kept.
 - Admin endpoint `POST /api/documents/{id}/requeue` puts a failed document back on the queue.
 - EF Core, ASP.NET Core Identity, `Microsoft.Extensions.*` and the Npgsql EF provider aligned on .NET 10 (10.0.15 / Npgsql 10.0.3).
