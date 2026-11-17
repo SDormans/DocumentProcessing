@@ -127,6 +127,24 @@ public class DocumentsController : ControllerBase
     /// <summary>
     /// Returns the original PDF document via an authorized endpoint.
     /// </summary>
+    /// <summary>
+    /// Re-queues a failed document for processing (admins only).
+    /// </summary>
+    [HttpPost("{id:guid}/requeue")]
+    [Authorize(Policy = "IsAdmin")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RequeueDocument(Guid id, CancellationToken cancellationToken)
+    {
+        return await _documentService.RequeueAsync(id, cancellationToken) switch
+        {
+            RequeueResult.Requeued => Accepted(new { id, status = "Queued" }),
+            RequeueResult.NotFailed => Conflict(new { message = "Only failed documents can be re-queued." }),
+            _ => NotFound()
+        };
+    }
+
     [HttpGet("{id:guid}/content")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]

@@ -33,6 +33,26 @@ public class DocumentService : IDocumentService
         _options = options.Value;
     }
 
+    public async Task<RequeueResult> RequeueAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var document = await _documentRepository.GetByIdAsync(id, cancellationToken);
+        if (document == null || !_currentUser.CanAccess(document))
+        {
+            return RequeueResult.NotFound;
+        }
+        if (document.Status != DocumentStatus.Failed)
+        {
+            return RequeueResult.NotFailed;
+        }
+
+        document.UpdateStatus(DocumentStatus.Queued);
+        await _documentRepository.UpdateAsync(document, cancellationToken);
+        await _processingQueue.EnqueueAsync(document.Id, cancellationToken);
+        await _documentRepository.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Document {DocumentId} re-queued by {UserId}.", document.Id, _currentUser.UserId);
+        return RequeueResult.Requeued;
+    }
+
     public async Task<UploadDocumentResponse> UploadDocumentAsync(
         Stream fileStream,
         string originalFileName,

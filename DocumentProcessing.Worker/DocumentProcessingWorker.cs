@@ -28,8 +28,15 @@ public class DocumentProcessingWorker : BackgroundService
     {
         _logger.LogInformation("Document processing worker {WorkerId} started.", _workerId);
 
+        var nextPurgeUtc = DateTime.UtcNow;
         while (!stoppingToken.IsCancellationRequested)
         {
+            if (DateTime.UtcNow >= nextPurgeUtc)
+            {
+                nextPurgeUtc = DateTime.UtcNow + _options.PurgeInterval;
+                await PurgeCompletedCommandsAsync(stoppingToken);
+            }
+
             var claimed = 0;
             try
             {
@@ -59,6 +66,24 @@ public class DocumentProcessingWorker : BackgroundService
         }
 
         _logger.LogInformation("Document processing worker {WorkerId} stopped.", _workerId);
+    }
+
+    internal async Task PurgeCompletedCommandsAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IQueueCommandRepository>();
+            var purged = await repository.PurgeCompletedAsync(DateTime.UtcNow - _options.CompletedRetention, stoppingToken);
+            if (purged > 0)
+            {
+                _logger.LogInformation("Purged {Count} completed queue commands older than {Retention}.", purged, _options.CompletedRetention);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Purging completed queue commands failed.");
+        }
     }
 
     internal async Task<int> ProcessBatchAsync(CancellationToken stoppingToken)

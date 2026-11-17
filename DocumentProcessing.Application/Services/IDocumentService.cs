@@ -14,5 +14,17 @@ public interface IDocumentService
 
     Task<IReadOnlyList<DocumentDto>> GetDocumentsAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Puts a failed document back on the processing queue.
+    /// </summary>
+    Task<RequeueResult> RequeueAsync(Guid id, CancellationToken cancellationToken = default);
+
     Task<DocumentFileDto?> GetDocumentFileAsync(Guid id, CancellationToken cancellationToken = default);
+}
+
+public enum RequeueResult
+{
+    Requeued,
+    NotFound,
+    NotFailed
 }

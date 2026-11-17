@@ -20,6 +20,7 @@ In Development, Swagger UI is available at `/swagger`.
 | POST | `/api/documents` | Signed in; 20/min per user | `multipart/form-data`, field `file`. `201`, `400` validation, `413` too large |
 | GET | `/api/documents` | Signed in | Own documents; all for unrestricted roles |
 | GET | `/api/documents/{id}` | Signed in, owner | `404` if missing **or not yours** |
+| POST | `/api/documents/{id}/requeue` | `IsAdmin` | Re-queues a `Failed` document. `202`, `404` missing, `409` not failed |
 | GET | `/api/documents/{id}/content` | Signed in, owner | The PDF |
 
 ## Review

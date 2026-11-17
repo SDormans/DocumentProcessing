@@ -12,7 +12,7 @@
 | Document stays `Queued` | Worker not running (`docker compose logs worker`), or a different `FileStorage` setting from the API |
 | Document `NeedsReview` with empty fields | `Ai:Provider=Fake`. Configure `OpenAI` |
 | Document `Failed` | Check `QueueCommands.LastErrorCategory`. No text (scanned PDF, no OCR yet), or the LLM refused or returned schema-invalid output (not retried), or timeouts/5xx after `MaxAttempts` |
-| Worker logs `libgssapi_krb5.so.2` not found | Startup message on the Alpine worker image; processing still works. Likely a Kerberos (GSSAPI) library probe. Tracked in the [Roadmap](Roadmap.md) |
+| Worker logs every SQL command | Set `WORKER_SQL_LOG_LEVEL=Warning` (the Compose default); `Information` shows each queue poll |
 | Sign-in fails in Azure with 500 | `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` missing on the API |
 | Everyone is logged out after a deploy | Data Protection keys aren't persisted yet ([Roadmap](Roadmap.md)) |
 | Reviewer can't see a document | It belongs to another user, or it predates ownership (no owner, so only admins see it) |

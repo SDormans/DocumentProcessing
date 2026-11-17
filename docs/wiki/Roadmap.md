@@ -77,6 +77,8 @@ Exit criteria: an integration test per item, and a browser smoke test of upload 
 
 ## Continuous: tech debt and hygiene
 
+_On branch `milestone/0-tech-debt` (not merged yet): package alignment, warning fixes with `TreatWarningsAsErrors`, official PdfPig, quieter worker logs and the `libgssapi_krb5` fix, README refresh, Dependabot. Frontend tests and the Playwright smoke test are on `milestone/1-review-fixes`._
+
 - Align package versions on .NET 10: EF Core, Identity and `Npgsql.EntityFrameworkCore.PostgreSQL` are 9.0.0, while `Npgsql` is 10.0.0.
 - Remove the duplicate `Microsoft.EntityFrameworkCore.InMemory` reference (NU1504) and the obsolete `PostgreSqlBuilder()` constructor (CS0618). Then turn on `TreatWarningsAsErrors`.
 - Replace the custom `PdfPig 1.7.0-custom-5` with an official release, or document where it comes from.

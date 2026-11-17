@@ -18,6 +18,8 @@ public interface IQueueCommandRepository
         TimeSpan leaseDuration,
         int batchSize,
         CancellationToken cancellationToken = default);
+    /// <summary>Deletes completed commands finished before <paramref name="completedBeforeUtc"/>; returns the count.</summary>
+    Task<int> PurgeCompletedAsync(DateTime completedBeforeUtc, CancellationToken cancellationToken = default);
     Task AddAsync(QueueCommand command, CancellationToken cancellationToken = default);
     Task UpdateAsync(QueueCommand command, CancellationToken cancellationToken = default);
 }

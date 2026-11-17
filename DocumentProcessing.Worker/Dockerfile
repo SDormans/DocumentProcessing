@@ -20,6 +20,8 @@ RUN dotnet publish DocumentProcessing.Worker/DocumentProcessing.Worker.csproj \
 FROM mcr.microsoft.com/dotnet/runtime:10.0-alpine AS runtime
 WORKDIR /app
 COPY --from=build --chown=app:app /app/publish .
+# krb5-libs: Npgsql probes for GSSAPI at startup and logs an error when libgssapi_krb5.so.2 is missing.
+RUN apk add --no-cache krb5-libs
 RUN mkdir -p /app/data/storage && chown -R app:app /app/data
 USER app
 ENTRYPOINT ["dotnet", "DocumentProcessing.Worker.dll"]

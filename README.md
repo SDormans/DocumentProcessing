@@ -2,7 +2,7 @@
 
 An ASP.NET Core and React platform for invoice PDFs: upload, queued background extraction (PDF text → LLM with a strict JSON schema → deterministic validation) and a human review UI.
 
-**Status:** the upload → queue → worker → extraction → review pipeline runs end to end in automated tests (Testcontainers + PostgreSQL) with the built-in fake AI provider. It has **not yet been run against a real LLM endpoint**, so there are no published accuracy numbers yet; the first scored run is milestone 2 on the [roadmap](docs/wiki/Roadmap.md). Known issues are listed in milestone 1 of the same roadmap. The sections below describe the current state, including limitations, so that demo results are not confused with live model output.
+**Status:** the upload → queue → worker → extraction → review pipeline runs end to end in automated tests (Testcontainers + PostgreSQL) with the built-in fake AI provider. It has **not yet been run against a real LLM endpoint**, so there are no published accuracy numbers yet; the first scored run is milestone 2 on the [roadmap](docs/wiki/Roadmap.md). Full documentation lives in the [project wiki](docs/wiki/README.md). The sections below describe the current state, including limitations, so that demo results are not confused with live model output.
 
 > **Project origin:** this project started as a demo for the **Accel Hackathon Paris** (commits from 21–22 October 2026). The state at the end of the hackathon is preserved as the [`hackathon-v0`](https://github.com/SDormans/DocumentProcessing/releases/tag/hackathon-v0) release and tag. Work after that point is being done deliberately in the open, as a portfolio project, and is tracked in the [changelog](CHANGELOG.md). See [Project history](#project-history).
 <!-- TODO: credit teammates here if the hackathon work was done as a team. -->
@@ -197,7 +197,7 @@ Running `npm run evaluate` against dataset version 1.0.0 with no prediction file
 | Schema failure, invalid extraction, and review rates | Not available |
 | Processing duration, retries, and estimated AI cost | Not available |
 
-These are evaluation-harness coverage results, **not** model-accuracy measurements. No live extraction results are available because the extractor and external AI integration are incomplete. The harness tests use controlled in-memory examples to verify scoring logic; those test fixtures are not benchmark results.
+These are evaluation-harness coverage results, **not** model-accuracy measurements. No live extraction results are available yet because the extractor has only run with the Fake provider; scoring a real model is milestone 2 on the [roadmap](docs/wiki/Roadmap.md). The harness tests use controlled in-memory examples to verify scoring logic; those test fixtures are not benchmark results.
 
 ## Security and operational boundaries
 

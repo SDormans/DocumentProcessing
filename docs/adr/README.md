@@ -6,3 +6,7 @@ Short records of significant decisions, in the [Michael Nygard format](https://c
 |---|---|---|
 | [0001](0001-database-backed-queue.md) | Keep the PostgreSQL-backed processing queue | Accepted |
 | [0002](0002-azure-container-apps.md) | Deploy container images to Azure Container Apps | Accepted |
+| [0003](0003-local-identity-accounts.md) | ASP.NET Core Identity with local accounts | Accepted |
+| [0004](0004-concrete-repositories.md) | Concrete repositories over direct `AppDbContext` injection | Accepted |
+| [0005](0005-openai-compatible-strict-schema.md) | OpenAI-compatible HTTP provider with a strict JSON schema | Accepted |
+| [0006](0006-squash-migrations-baseline.md) | Squash pre-release migrations into `InitialBaseline` | Accepted |
