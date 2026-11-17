@@ -84,4 +84,4 @@ DocumentProcessing.Api/data/
 Thumbs.db
 
 # dotnet tool manifest
-.config/
+.config/DocumentProcessing.Web/*.tsbuildinfo
