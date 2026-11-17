@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Security
+- Nginx sends Content-Security-Policy, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, and HSTS when reached over HTTPS; `server_tokens off`.
+- Forwarded headers are trusted only from `ForwardedHeaders:KnownProxies`/`KnownNetworks` (loopback when unset), also when `ASPNETCORE_FORWARDEDHEADERS_ENABLED` is used.
+- `CanApproveReject` checks every role claim (`RequireRole("Admin", "Reviewer")`), not just the first.
+- CI `security-scan` job: vulnerable NuGet packages, `npm audit` of web production dependencies, and Trivy scans of the three images (fixable HIGH/CRITICAL fail).
+
 ### Added
 - ASP.NET Core Identity user store backed by PostgreSQL, replacing the in-memory `DevelopmentUserService`; the API can now start outside Development.
 - README: project origin note and project history section (hackathon version vs portfolio version).

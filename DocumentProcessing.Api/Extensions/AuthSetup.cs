@@ -45,11 +45,7 @@ public static class AuthSetup
                 policy.RequireAuthenticatedUser());
             options.AddPolicy("CanApproveReject", policy =>
                 policy.RequireAuthenticatedUser()
-                    .RequireAssertion(context =>
-                    {
-                        var role = context.User.FindFirst(ClaimTypes.Role)?.Value;
-                        return role == "Admin" || role == "Reviewer";
-                    }));
+                    .RequireRole("Admin", "Reviewer"));
             options.AddPolicy("IsAdmin", policy =>
                 policy.RequireAuthenticatedUser()
                     .RequireRole("Admin"));

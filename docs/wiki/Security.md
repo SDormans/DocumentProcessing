@@ -20,7 +20,8 @@
 - **No malware scanning.** A file that looks like a PDF isn't proven safe. See the design in [security-follow-ups.md](https://github.com/SDormans/DocumentProcessing/blob/master/docs/security-follow-ups.md).
 - **No retention or deletion.** Data is kept forever, and there is no erase endpoint. The design is in the same document.
 - **Data Protection keys aren't persisted.** Sign-in cookies don't survive a container restart and can't be shared across API replicas.
-- **Forwarded headers:** without `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` and a trusted proxy, every client behind Nginx shares one login rate-limit partition.
+- **Forwarded headers:** only proxies in `ForwardedHeaders:KnownProxies`/`KnownNetworks` are trusted (loopback by default). Without a trusted proxy configured, every client behind Nginx shares one login rate-limit partition.
+- **Browser headers:** Nginx sets a strict CSP (`'self'` only, `blob:` for the PDF preview), `nosniff`, `DENY` framing, a referrer policy, and HSTS over HTTPS.
 - **No security headers** (CSP, `X-Content-Type-Options`, frame-ancestors) are set in Nginx.
 - **`CanApproveReject`** reads only the first role claim. A user with several roles could be refused.
 - **Prompt injection:** invoice text goes to the LLM. The strict schema limits what comes back, but extracted values must still be treated as untrusted input.

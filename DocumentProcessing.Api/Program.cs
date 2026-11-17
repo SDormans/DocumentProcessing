@@ -21,7 +21,8 @@ builder.Services
     .AddApiRateLimiting(builder.Configuration)
     .AddApiAntiforgery(builder.Environment)
     .AddCookieAuthentication(builder.Environment)
-    .AddAuthorizationPolicies();
+    .AddAuthorizationPolicies()
+    .AddTrustedForwardedHeaders(builder.Configuration);
 
 builder.Services.AddControllers(options => options.Filters.Add<ValidateAntiforgeryOnUnsafeMethodsFilter>());
 builder.Services.AddEndpointsApiExplorer();
@@ -37,6 +38,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.UseTrustedForwardedHeaders();
 app.UseMiddleware<ErrorHandlingMiddleware>();
 app.UseHttpsRedirection();
 app.UseAuthentication();

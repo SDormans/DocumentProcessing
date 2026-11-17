@@ -59,3 +59,38 @@ jobs:
 
       - name: Build container images
         run: docker compose --env-file .env.example build
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Vulnerable NuGet packages
+        run: |
+          dotnet restore DocumentProcessing.slnx
+          dotnet list DocumentProcessing.slnx package --vulnerable --include-transitive | tee nuget-audit.txt
+          if grep -q "has the following vulnerable packages" nuget-audit.txt; then
+            echo "::error::Vulnerable NuGet packages found"; exit 1
+          fi
+
+      - name: Vulnerable npm packages (production dependencies)
+        run: npm audit --prefix DocumentProcessing.Web --omit=dev --audit-level=high
+
+      - name: Build images
+        run: docker compose --env-file .env.example build
+
+      - name: Scan images (fixable HIGH/CRITICAL fail the build)
+        run: |
+          for image in documentprocessing-api documentprocessing-worker documentprocessing-web; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.58.1 image \
+              --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL --no-progress "$image"
+          done
+
