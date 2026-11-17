@@ -20,7 +20,9 @@ sign-in, upload, worker processing to `NeedsReview`, correction, approve, audit 
 
 **Not verified yet:** a real LLM endpoint (only `Ai:Provider=Fake`, which returns empty fields), a real Azure deployment, the review UI in a browser.
 
-## Milestone 1: fix what's broken (next)
+## Milestone 1: fix what's broken
+
+_Implemented on branch `milestone/1-review-fixes` (not merged yet): all five items, with unit and integration tests per item, Vitest tests for the review form and a Playwright browser smoke test (`e2e` CI job)._
 
 | # | Item | Why | Where |
 |---|---|---|---|

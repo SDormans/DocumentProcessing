@@ -88,7 +88,7 @@ public class DocumentOwnershipTests
         (await service.RejectAsync(_foreign.Id, new() { Reason = "x" }, "alice", "alice")).Success.Should().BeFalse();
         (await service.SubmitCorrectionsAsync(_foreign.Id, new() { CorrectedValues = new Dictionary<string, string> { ["SupplierName"] = "x" } }, "alice", "alice"))
             .Success.Should().BeFalse();
-        (await service.GetAuditLogAsync(_foreign.Id)).Should().BeEmpty();
+        (await service.GetAuditLogAsync(_foreign.Id)).Should().BeNull();
 
         _reviews.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
         _reviews.Verify(r => r.GetByDocumentIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);

@@ -92,6 +92,9 @@ services:
     build:
       context: DocumentProcessing.Web
       dockerfile: Dockerfile
+    environment:
+      # Keep above MAX_FILE_SIZE_BYTES + 128 KiB multipart overhead.
+      CLIENT_MAX_BODY_SIZE: ${CLIENT_MAX_BODY_SIZE:-11m}
     depends_on:
       api:
         condition: service_healthy
