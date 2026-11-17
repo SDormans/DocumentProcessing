@@ -6,7 +6,8 @@ COPY . .
 RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:alpine AS runtime
-ENV API_UPSTREAM=http://api:8080
+ENV API_UPSTREAM=http://api:8080 \
+    CLIENT_MAX_BODY_SIZE=11m
 COPY templates/ /etc/nginx/templates/
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 8080

@@ -1,5 +1,7 @@
 # Rendered by the nginx image's envsubst step at container start; only defined env vars are substituted.
 # API_UPSTREAM: http://api:8080 in Docker Compose; the API's internal https URL on Azure Container Apps.
+# CLIENT_MAX_BODY_SIZE: largest request body Nginx forwards. Keep it at least the API's DocumentService:MaxFileSizeBytes
+# plus the 128 KiB multipart allowance, or uploads fail here with 413 before reaching the API.
 # Keep the scheme reported by a TLS-terminating ingress in front of this container (Azure Container Apps).
 map $http_x_forwarded_proto $forwarded_proto {
     default $http_x_forwarded_proto;
@@ -11,6 +13,7 @@ server {
     server_name _;
     root /usr/share/nginx/html;
     index index.html;
+    client_max_body_size ${CLIENT_MAX_BODY_SIZE};
 
     location /api/ {
         proxy_pass ${API_UPSTREAM};

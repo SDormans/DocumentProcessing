@@ -22,7 +22,7 @@ Standard ASP.NET Core configuration: `appsettings*.json`, then environment varia
 | Key | Default | Notes |
 |---|---|---|
 | `Authentication:Bootstrap:Username` / `Password` / `Email` / `Role` | (required) / / / `Admin` | Creates the first user if it doesn't exist. Changing these later doesn't modify an existing account |
-| `DocumentService:MaxFileSizeBytes` | `10485760` | Keep the Nginx `client_max_body_size` in step |
+| `DocumentService:MaxFileSizeBytes` | `10485760` | Keep the web image's `CLIENT_MAX_BODY_SIZE` (Nginx `client_max_body_size`, default `11m`) at least 128 KiB above it |
 | `DocumentAccess:UnrestrictedRoles` | `["Admin"]` | Roles that see all documents. The configured list **replaces** the default |
 | `RateLimiting:Login:PermitLimit` / `Period` | `5` / `00:01:00` | Per client IP |
 | `RateLimiting:Upload:PermitLimit` / `Period` | `20` / `00:01:00` | Per signed-in user |

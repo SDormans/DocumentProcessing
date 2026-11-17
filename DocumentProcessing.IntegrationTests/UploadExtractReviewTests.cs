@@ -88,14 +88,122 @@ public class UploadExtractReviewTests(PostgresFixture postgres) : IAsyncLifetime
         (await bob.Http.GetAsync($"/api/documents/{id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await bob.Http.GetAsync($"/api/documents/{id}/review")).StatusCode.Should().Be(HttpStatusCode.NotFound);
         var approve = await bob.SendAsync(HttpMethod.Post, $"/api/documents/{id}/review/approve", JsonContent.Create(new { comment = "x" }));
-        approve.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        approve.StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await approve.Content.ReadAsStringAsync()).Should().Contain("Document niet gevonden");
+        (await bob.SendAsync(HttpMethod.Post, $"/api/documents/{id}/review/reject", JsonContent.Create(new { reason = "x" })))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await bob.SendAsync(HttpMethod.Put, $"/api/documents/{id}/review/corrections", CorrectionsContent(("SupplierName", "x"))))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await bob.Http.GetAsync($"/api/documents/{id}/review/audit-log")).StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await bob.Http.GetFromJsonAsync<JsonElement>("/api/documents")).EnumerateArray()
             .Should().NotContain(d => d.GetProperty("id").GetGuid() == id);
 
         using var admin = await SignInAsync(ApiFactory.AdminUserName, ApiFactory.AdminPassword);
         (await admin.Http.GetAsync($"/api/documents/{id}")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
+
+    [Fact]
+    public async Task Review_actions_on_a_missing_document_return_404()
+    {
+        using var alice = await SignInAsync("alice");
+        var missing = Guid.NewGuid();
+
+        (await alice.SendAsync(HttpMethod.Post, $"/api/documents/{missing}/review/approve", JsonContent.Create(new { })))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await alice.SendAsync(HttpMethod.Post, $"/api/documents/{missing}/review/reject", JsonContent.Create(new { reason = "x" })))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await alice.SendAsync(HttpMethod.Put, $"/api/documents/{missing}/review/corrections", CorrectionsContent(("SupplierName", "x"))))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await alice.Http.GetAsync($"/api/documents/{missing}/review/audit-log")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Saved_corrections_are_returned_by_the_review_endpoint_after_reload()
+    {
+        using var alice = await SignInAsync("alice");
+        var id = await UploadAsync(alice, "Invoice INV-2026-001");
+        await _factory.DrainQueueAsync();
+
+        (await alice.SendAsync(HttpMethod.Put, $"/api/documents/{id}/review/corrections",
+            CorrectionsContent(("InvoiceNumber", "INV-2026-001-A"), ("TotalAmount", "122.00"))))
+            .EnsureSuccessStatusCode();
+        (await alice.SendAsync(HttpMethod.Put, $"/api/documents/{id}/review/corrections", CorrectionsContent(("DueDate", "2026-11-30"))))
+            .EnsureSuccessStatusCode();
+
+        var review = await alice.Http.GetFromJsonAsync<JsonElement>($"/api/documents/{id}/review");
+        review.GetProperty("reviewStatus").GetString().Should().Be("Corrected");
+        var fields = FieldsByName(review);
+        fields.Keys.Should().Contain(new[] { "SupplierName", "InvoiceNumber", "InvoiceDate", "DueDate", "Currency", "Subtotal", "TaxAmount", "TotalAmount", "Lines" });
+        fields["InvoiceNumber"].GetProperty("value").GetString().Should().Be("INV-2026-001");
+        fields["InvoiceNumber"].GetProperty("correctedValue").GetString().Should().Be("INV-2026-001-A");
+        fields["InvoiceNumber"].GetProperty("effectiveValue").GetString().Should().Be("INV-2026-001-A");
+        fields["InvoiceNumber"].GetProperty("isCorrected").GetBoolean().Should().BeTrue();
+        fields["TotalAmount"].GetProperty("effectiveValue").GetString().Should().Be("122.00");
+        fields["DueDate"].GetProperty("effectiveValue").GetString().Should().Be("2026-11-30");
+        fields["SupplierName"].GetProperty("effectiveValue").GetString().Should().Be("Acme B.V.");
+        fields["SupplierName"].GetProperty("isCorrected").GetBoolean().Should().BeFalse();
+
+        var audit = await alice.Http.GetFromJsonAsync<JsonElement>($"/api/documents/{id}/review/audit-log");
+        audit.EnumerateArray().Should().Contain(e =>
+            e.GetProperty("fieldName").GetString() == "InvoiceNumber"
+            && e.GetProperty("oldValue").GetString() == "INV-2026-001"
+            && e.GetProperty("newValue").GetString() == "INV-2026-001-A");
+    }
+
+    [Fact]
+    public async Task Invalid_corrections_are_rejected_with_400_and_not_saved()
+    {
+        using var alice = await SignInAsync("alice");
+        var id = await UploadAsync(alice, "Invoice INV-2026-001");
+        await _factory.DrainQueueAsync();
+
+        var response = await alice.SendAsync(HttpMethod.Put, $"/api/documents/{id}/review/corrections",
+            CorrectionsContent(("InvoiceDate", "31/10/2026"), ("NotAField", "x")));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("errors").GetArrayLength().Should().Be(2);
+        var review = await alice.Http.GetFromJsonAsync<JsonElement>($"/api/documents/{id}/review");
+        review.GetProperty("reviewStatus").GetString().Should().Be("Pending");
+        FieldsByName(review)["InvoiceDate"].GetProperty("effectiveValue").GetString().Should().Be("2026-10-01");
+    }
+
+    [Fact]
+    public async Task Approval_validates_the_corrected_values()
+    {
+        using var alice = await SignInAsync("alice");
+        var id = await UploadAsync(alice, "Invoice INV-2026-001");
+        await _factory.DrainQueueAsync();
+
+        (await alice.SendAsync(HttpMethod.Put, $"/api/documents/{id}/review/corrections", CorrectionsContent(("InvoiceNumber", ""))))
+            .EnsureSuccessStatusCode();
+
+        var review = await alice.Http.GetFromJsonAsync<JsonElement>($"/api/documents/{id}/review");
+        review.GetProperty("validationResults").EnumerateArray().Should().Contain(r =>
+            r.GetProperty("ruleId").GetString() == "MISSING_REQUIRED_FIELDS" && r.GetProperty("affectedFields").GetString() == "InvoiceNumber");
+
+        var blocked = await alice.SendAsync(HttpMethod.Post, $"/api/documents/{id}/review/approve", JsonContent.Create(new { }));
+        blocked.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await blocked.Content.ReadAsStringAsync()).Should().Contain("InvoiceNumber");
+        (await GetDocumentAsync(alice, id)).GetProperty("status").GetString().Should().Be("NeedsReview");
+
+        (await alice.SendAsync(HttpMethod.Put, $"/api/documents/{id}/review/corrections", CorrectionsContent(("InvoiceNumber", "INV-2026-001-B"))))
+            .EnsureSuccessStatusCode();
+        (await alice.SendAsync(HttpMethod.Post, $"/api/documents/{id}/review/approve", JsonContent.Create(new { })))
+            .EnsureSuccessStatusCode();
+
+        review = await alice.Http.GetFromJsonAsync<JsonElement>($"/api/documents/{id}/review");
+        FieldsByName(review)["InvoiceNumber"].GetProperty("approvedValue").GetString().Should().Be("INV-2026-001-B");
+
+        var again = await alice.SendAsync(HttpMethod.Post, $"/api/documents/{id}/review/approve", JsonContent.Create(new { }));
+        again.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    private static JsonContent CorrectionsContent(params (string Field, string Value)[] values) =>
+        JsonContent.Create(new { correctedValues = values.ToDictionary(v => v.Field, v => v.Value) });
+
+    private static Dictionary<string, JsonElement> FieldsByName(JsonElement review) =>
+        review.GetProperty("extractedFields").EnumerateArray().ToDictionary(f => f.GetProperty("fieldName").GetString()!);
 
     private async Task<ApiClient> SignInAsync(string userName, string password = ReviewerPassword)
     {

@@ -1,119 +1,112 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { xsrfHeaders } from '../csrf';
 
-interface ReviewState {
+export interface ReviewField {
   fieldName: string;
-  currentValue: string | null;
-  canApprove: boolean;
-  canReject: boolean;
+  value: string | null;
+  correctedValue: string | null;
+  approvedValue: string | null;
+  effectiveValue: string | null;
+  isCorrected: boolean;
+}
+
+export interface ValidationResult {
+  ruleId: string;
+  severity: string;
+  message: string;
+  affectedFields: string | null;
+}
+
+export interface ReviewDetail {
+  status: string;
+  reviewStatus: string;
+  contentUrl: string | null;
+  rejectionReason: string | null;
+  extractedFields: ReviewField[];
+  validationResults: ValidationResult[];
 }
 
 interface ReviewActionResponse {
   success: boolean;
   message: string | null;
+  errors?: string[];
 }
 
-interface DocumentDetail {
-  extractedFields?: Array<{
-    fieldName: string;
-    value: string | null;
-  }>;
+export class ReviewActionError extends Error {
+  constructor(message: string, readonly errors: string[] = []) {
+    super(message);
+  }
 }
+
+const decidedStatuses = ['Approved', 'Rejected'];
+
+export const isDecided = (detail: ReviewDetail) => decidedStatuses.includes(detail.reviewStatus);
+
+export const blockingResults = (detail: ReviewDetail) =>
+  detail.validationResults.filter(r => r.severity === 'Error' || r.severity === 'Critical');
+
+const send = async (url: string, method: string, body: unknown, fallback: string) => {
+  const response = await fetch(url, {
+    method,
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...xsrfHeaders() },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => null) as ReviewActionResponse | null;
+  if (!response.ok || !result?.success) {
+    throw new ReviewActionError(result?.message ?? fallback, result?.errors ?? []);
+  }
+  return result;
+};
 
 export const useDocumentReview = (documentId: string) => {
-  const [reviewState, setReviewState] = useState<ReviewState | null>(null);
+  const [detail, setDetail] = useState<ReviewDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [reviewError, setReviewError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const response = await fetch(`/api/documents/${documentId}/review`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    if (response.status === 404) throw new Error('This document does not exist or you do not have access to it.');
+    if (!response.ok) throw new Error('Could not load review data.');
+    setDetail(await response.json() as ReviewDetail);
+  }, [documentId]);
 
   useEffect(() => {
     if (!documentId) {
       setIsLoading(false);
       return;
     }
+    setIsLoading(true);
+    load()
+      .catch(error => setReviewError(error instanceof Error ? error.message : 'Could not load review data.'))
+      .finally(() => setIsLoading(false));
+  }, [documentId, load]);
 
-    const loadReviewState = async () => {
-      try {
-        const response = await fetch(`/api/documents/${documentId}/review`, {
-          headers: { Accept: 'application/json' },
-          credentials: 'same-origin',
-        });
-        if (!response.ok) throw new Error('Could not load review data.');
-
-        const detail = await response.json() as DocumentDetail;
-        const field = detail.extractedFields?.[0];
-        if (field) {
-          setReviewState({
-            fieldName: field.fieldName,
-            currentValue: field.value,
-            canApprove: true,
-            canReject: true,
-          });
-        } else {
-          setReviewState(null);
-        }
-      } catch (error) {
-        setReviewError(error instanceof Error ? error.message : 'Could not load review data.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    void loadReviewState();
-  }, [documentId]);
-
-  const submitCorrections = async (fieldName: string, correctedValue: string) => {
-    const response = await fetch(`/api/documents/${documentId}/review/corrections`, {
-      method: 'PUT',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', ...xsrfHeaders() },
-      body: JSON.stringify({ correctedValues: { [fieldName]: correctedValue } }),
-    });
-    if (!response.ok) throw new Error('Could not save the correction.');
-
-    const result = await response.json() as ReviewActionResponse;
-    if (!result.success) throw new Error(result.message ?? 'Could not save the correction.');
-    setReviewState(previous => previous
-      ? { ...previous, currentValue: correctedValue }
-      : previous);
+  const submitCorrections = async (correctedValues: Record<string, string>) => {
+    const result = await send(`/api/documents/${documentId}/review/corrections`, 'PUT', { correctedValues },
+      'Could not save the corrections.');
+    await load();
     return result;
   };
 
   const approve = async () => {
-    const response = await fetch(`/api/documents/${documentId}/review/approve`, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', ...xsrfHeaders() },
-      body: JSON.stringify({}),
-    });
-    if (!response.ok) throw new Error('Could not approve the document.');
-
-    const result = await response.json() as ReviewActionResponse;
-    if (!result.success) throw new Error(result.message ?? 'Could not approve the document.');
-    setReviewState(null);
-    return result;
+    try {
+      return await send(`/api/documents/${documentId}/review/approve`, 'POST', {}, 'Could not approve the document.');
+    } finally {
+      await load().catch(() => undefined);
+    }
   };
 
   const reject = async (request: { reason: string }) => {
-    const response = await fetch(`/api/documents/${documentId}/review/reject`, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', ...xsrfHeaders() },
-      body: JSON.stringify(request),
-    });
-    if (!response.ok) throw new Error('Could not reject the document.');
-
-    const result = await response.json() as ReviewActionResponse;
-    if (!result.success) throw new Error(result.message ?? 'Could not reject the document.');
-    setReviewState(null);
-    return result;
+    try {
+      return await send(`/api/documents/${documentId}/review/reject`, 'POST', request, 'Could not reject the document.');
+    } finally {
+      await load().catch(() => undefined);
+    }
   };
 
-  return {
-    reviewState,
-    submitCorrections,
-    approve,
-    reject,
-    isLoading,
-    reviewError,
-  };
+  return { detail, submitCorrections, approve, reject, isLoading, reviewError };
 };

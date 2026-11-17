@@ -36,7 +36,7 @@ Upload one of the PDFs in the web app. Within a few seconds the worker moves the
 
 > With the default `AI_PROVIDER=Fake`, the extracted fields are **empty**, so validation reports missing required fields. That is expected. To get real values, set `AI_PROVIDER=OpenAI`, `AI_API_KEY` and `AI_MODEL` in `.env` and restart the worker (see [Configuration](Configuration.md)).
 
-> Uploads over 1 MB currently fail through the web app (Nginx returns 413). See [Roadmap](Roadmap.md) item 1.1.
+> The review screen shows the PDF next to every extracted field. Fill in the required fields (supplier, invoice number, invoice date, total), save the corrections, then approve.
 
 ## Add users
 

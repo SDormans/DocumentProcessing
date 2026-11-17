@@ -26,13 +26,25 @@ In Development, Swagger UI is available at `/swagger`.
 
 | Method | Path | Access | Body |
 |---|---|---|---|
-| GET | `/api/documents/{id}/review` | `CanReviewDocuments`, owner | Fields, validation results, review status |
-| PUT | `/api/documents/{id}/review/corrections` | `CanReviewDocuments`, owner | `{ "correctedValues": { "SupplierName": "Acme B.V." } }` |
+| GET | `/api/documents/{id}/review` | `CanReviewDocuments`, owner | All nine fields (`value` extracted, `correctedValue`, `approvedValue`, `effectiveValue`, `isCorrected`), validation results computed on the effective values, review status, `contentUrl` |
+| PUT | `/api/documents/{id}/review/corrections` | `CanReviewDocuments`, owner | `{ "correctedValues": { "SupplierName": "Acme B.V." } }`. Merged with earlier corrections; an empty string clears a field |
 | POST | `/api/documents/{id}/review/approve` | `CanApproveReject`, owner | `{ "comment": "optional" }` |
 | POST | `/api/documents/{id}/review/reject` | `CanApproveReject`, owner | `{ "reason": "required" }` |
 | GET | `/api/documents/{id}/review/audit-log` | `CanReviewDocuments`, owner | Field-level change history |
 
-Review actions currently return `400` (not `404`) for a missing or inaccessible document. This is tracked in [Roadmap](Roadmap.md).
+Correction input is checked before anything is saved: field names must be one of `SupplierName`, `InvoiceNumber`, `InvoiceDate`, `DueDate`, `Currency`, `Subtotal`, `TaxAmount`, `TotalAmount`, `Lines`; dates are `yyyy-MM-dd`, amounts use a `.` decimal point (`1234.56`), currencies are three letters; values are at most 1,000 characters (`Lines`: 20,000, one line per row).
+
+Approval validates the **effective** values (extraction plus corrections) and is refused with `400` while any `Error` or `Critical` validation result remains; the response's `errors` array lists them.
+
+Review action status codes:
+
+| Status | When |
+|---|---|
+| `200` | Done |
+| `400` | Invalid input (`errors` lists each problem), missing rejection reason, or blocking validation results on approval |
+| `403` | Role may not approve or reject |
+| `404` | Document missing or not accessible (also for `audit-log`) |
+| `409` | Document not in `NeedsReview`, review already approved/rejected, or a concurrent update |
 
 ## Health
 
@@ -58,5 +70,5 @@ On top of the policies, ownership applies: reviewers only reach their own docume
 | `400` | Validation error, missing or invalid anti-forgery token |
 | `401` / `403` | Not signed in / role not allowed |
 | `404` | Document missing or not accessible |
-| `413` | File too large (from Nginx above 1 MB today, from the API above `MaxFileSizeBytes`) |
+| `413` | File too large (from Nginx above `CLIENT_MAX_BODY_SIZE`, from the API above `MaxFileSizeBytes`) |
 | `429` | Rate limit hit; see `Retry-After` |
