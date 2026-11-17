@@ -112,7 +112,7 @@ jobs:
       IMAGE_PREFIX: ${{ needs.publish.outputs.registry }}
       TAG: ${{ needs.publish.outputs.tag }}
     steps:
-      - uses: azure/login@v2
+      - uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
