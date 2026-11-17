@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using DocumentProcessing.Domain.Entities;
 using DocumentProcessing.Infrastructure.Data;
+using DocumentProcessing.Infrastructure.Queue;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -58,6 +59,30 @@ public class RequeueTests(PostgresFixture postgres) : IAsyncLifetime
 
         (await admin.SendAsync(HttpMethod.Post, $"/api/documents/{Guid.NewGuid()}/requeue", null))
             .StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Completed_queue_commands_older_than_the_retention_are_purged()
+    {
+        using var admin = _factory.CreateApiClient();
+        (await admin.LoginAsync(ApiFactory.AdminUserName, ApiFactory.AdminPassword)).EnsureSuccessStatusCode();
+        var oldId = await UploadAsync(admin);
+        await _factory.DrainQueueAsync();
+        var recentId = await UploadAsync(admin);
+        await _factory.DrainQueueAsync();
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE \"QueueCommands\" SET \"CompletedAtUtc\" = now() - interval '40 days' WHERE \"DocumentId\" = {oldId}");
+
+        var purged = await scope.ServiceProvider.GetRequiredService<IQueueCommandRepository>()
+            .PurgeCompletedAsync(DateTime.UtcNow - TimeSpan.FromDays(30));
+
+        purged.Should().Be(1);
+        (await db.QueueCommands.AnyAsync(c => c.DocumentId == oldId)).Should().BeFalse();
+        (await db.QueueCommands.AnyAsync(c => c.DocumentId == recentId)).Should().BeTrue();
+        (await db.Documents.AnyAsync(d => d.Id == oldId)).Should().BeTrue();
     }
 
     private static async Task<Guid> UploadAsync(ApiClient client)

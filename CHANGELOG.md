@@ -20,6 +20,7 @@ All notable changes to this project are documented here.
 - Project wiki in `docs/wiki/` (architecture, configuration, API, security, deployment, troubleshooting, roadmap).
 
 ### Changed
+- The worker deletes completed queue commands after `QueueProcessing:CompletedRetention` (default 30 days, checked every `PurgeInterval`, default 1 hour); failed commands are kept.
 - Admin endpoint `POST /api/documents/{id}/requeue` puts a failed document back on the queue.
 - EF Core, ASP.NET Core Identity, `Microsoft.Extensions.*` and the Npgsql EF provider aligned on .NET 10 (10.0.15 / Npgsql 10.0.3).
 - PDF text extraction uses the official `PdfPig` 0.1.16 package instead of the third-party `UglyToad.PdfPig 1.7.0-custom-5` upload.

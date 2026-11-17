@@ -46,6 +46,8 @@ Standard ASP.NET Core configuration: `appsettings*.json`, then environment varia
 | `QueueProcessing:LeaseDuration` | `00:05:00` | Must exceed `Ai:TotalTimeoutSeconds` |
 | `QueueProcessing:MaxAttempts` | `3` | Queue-level attempts before `Failed` |
 | `QueueProcessing:BaseRetryDelay` | `00:00:30` | Exponential backoff base |
+| `QueueProcessing:CompletedRetention` | `30.00:00:00` | Completed commands older than this are deleted; failed ones are kept |
+| `QueueProcessing:PurgeInterval` | `01:00:00` | How often the worker purges |
 
 ## Docker Compose (`.env`)
 
@@ -54,6 +56,7 @@ Standard ASP.NET Core configuration: `appsettings*.json`, then environment varia
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | PostgreSQL superuser (container init only) |
 | `APP_DB_USER`, `APP_DB_PASSWORD` | Application role used in the connection string |
 | `POSTGRES_PORT`, `API_PORT`, `WEB_PORT` | Host ports (bound to `127.0.0.1`) |
+| `WORKER_SQL_LOG_LEVEL` | Worker `Microsoft.EntityFrameworkCore.Database.Command` log level (default `Warning`) |
 | `MAX_FILE_SIZE_BYTES` | `DocumentService:MaxFileSizeBytes` |
 | `DEMO_ADMIN_USERNAME`, `DEMO_ADMIN_PASSWORD`, `DEMO_ADMIN_EMAIL` | `Authentication:Bootstrap:*` |
 | `AI_PROVIDER`, `AI_ENDPOINT`, `AI_API_KEY`, `AI_MODEL` | `Ai:*` (worker) |

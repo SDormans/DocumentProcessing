@@ -19,4 +19,10 @@ public class QueueProcessingOptions
 
     /// <summary>Delay before the first retry; doubles per attempt.</summary>
     public TimeSpan BaseRetryDelay { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>How long completed commands are kept before the worker deletes them. Failed commands are kept.</summary>
+    public TimeSpan CompletedRetention { get; set; } = TimeSpan.FromDays(30);
+
+    /// <summary>How often the worker purges completed commands.</summary>
+    public TimeSpan PurgeInterval { get; set; } = TimeSpan.FromHours(1);
 }
