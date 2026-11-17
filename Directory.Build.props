@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- The solution builds without warnings; keep it that way. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>
