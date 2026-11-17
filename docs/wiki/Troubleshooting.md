@@ -5,6 +5,7 @@
 | Compose asks for variables | Copy `.env.example` to `.env` and set the passwords |
 | `port is already allocated` | Change `POSTGRES_PORT` / `API_PORT` / `WEB_PORT` in `.env` |
 | `api` never becomes healthy | `docker compose logs api`: check the database credentials and the bootstrap username/password (both required) |
+| API exits with `Could not connect to PostgreSQL at <host>:<port>` (connection refused) | PostgreSQL isn't running or listens elsewhere. Start it (`docker compose up -d postgres`) and check the host and port in `ConnectionStrings:DefaultConnection`. Tune the wait with `Database:ConnectAttempts` / `ConnectRetryDelay` |
 | Bootstrap login fails | The user already exists with an older password. In a demo, run `docker compose down -v` |
 | Upload returns `413` through the web app | The file is larger than the web image's `CLIENT_MAX_BODY_SIZE` (default `11m`). Keep it at least `MAX_FILE_SIZE_BYTES` + 128 KiB |
 | Upload returns `400` | Missing `X-XSRF-TOKEN`, or the file isn't a real PDF (extension, MIME, `%PDF-` signature) |

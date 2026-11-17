@@ -28,11 +28,13 @@ All notable changes to this project are documented here.
 - CD workflow (`cd.yml`): images to GHCR, deploy to Azure Container Apps via OIDC; ADR 0002; `docs/deployment.md`.
 - Web image: the Nginx API upstream is configurable with `API_UPSTREAM` (default `http://api:8080`).
 - Project wiki in `docs/wiki/` (architecture, configuration, API, security, deployment, troubleshooting, roadmap).
+- Worker local configuration: `dotnet user-secrets` support, a Development launch profile and `appsettings.Development.example.json`; the missing-connection-string error now lists the ways to set it.
 - Review screen shows every extracted field with its validation messages, the extracted value next to corrected ones, and a PDF preview.
 - Server-side checks on review input: known field names, length limits, `yyyy-MM-dd` dates, `1234.56` amounts, ISO currency codes, rejection reason length.
 - Front-end tests (Vitest + Testing Library) and a Playwright browser smoke test of upload → review → approve, run by the new `e2e` CI job.
 
 ### Fixed
+- API startup no longer fails on the first refused PostgreSQL connection: it retries (`Database:ConnectAttempts`, default 10, every `Database:ConnectRetryDelay`, default 3 s) before migrating, then fails with an error naming the host and port.
 - Uploads over 1 MB failed through the web app with `413`: Nginx now allows `CLIENT_MAX_BODY_SIZE` (default `11m`, above the API's 10 MiB limit).
 - Saved corrections are returned by `GET /api/documents/{id}/review` (`correctedValue`, `approvedValue`, `effectiveValue`); corrections are merged with earlier ones and the audit log records the previous value.
 - Review actions on a missing or inaccessible document return `404` instead of `400` (the audit log too, instead of an empty `200`); decisions on a finished review return `409`.

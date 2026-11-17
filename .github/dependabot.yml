@@ -13,6 +13,11 @@ updates:
         patterns: ["OpenTelemetry*"]
       test:
         patterns: ["xunit*", "Moq", "FluentAssertions", "coverlet*", "Testcontainers*", "Microsoft.NET.Test.Sdk"]
+    ignore:
+      # Swashbuckle 11 needs Microsoft.OpenApi 3.x, but Microsoft.AspNetCore.OpenApi on .NET 10 pins Microsoft.OpenApi < 3 (NU1107).
+      # Remove this when the projects move to .NET 11.
+      - dependency-name: "Swashbuckle.AspNetCore*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /DocumentProcessing.Web
     schedule:

@@ -158,7 +158,10 @@ $env:Authentication__Bootstrap__Username = "demo-admin"
 $env:Authentication__Bootstrap__Password = "REPLACE_WITH_A_UNIQUE_PASSWORD"
 $env:Authentication__Bootstrap__Email = "demo-admin@example.invalid"
 dotnet run --project DocumentProcessing.Api
+dotnet run --project DocumentProcessing.Worker   # same shell: needs the same connection string
 ```
+
+The worker exits with `ConnectionStrings:DefaultConnection is required` when no connection string is set. Besides the environment variable, it reads `dotnet user-secrets` (`--project DocumentProcessing.Worker`) and a git-ignored `DocumentProcessing.Worker/appsettings.Development.json` (template: `appsettings.Development.example.json`); see [Getting Started](docs/wiki/Getting-Started.md#run-the-api-without-docker).
 
 Users are stored with ASP.NET Core Identity in PostgreSQL (`AspNetUsers`/`AspNetRoles` tables). On startup the API applies migrations, ensures the `Admin` and `Reviewer` roles exist, and creates the bootstrap user only if it does not exist yet; changing the bootstrap variables later does not modify an existing account. Additional users are created by an administrator through `POST /api/auth/register`.
 
@@ -280,6 +283,7 @@ GitHub Actions is configured in [`.github/workflows/ci.yml`](./.github/workflows
 ## Troubleshooting
 
 - **Compose asks for environment variables:** copy `.env.example` to `.env` and replace the placeholder passwords.
+- **API exits with `Could not connect to PostgreSQL at <host>:<port>`:** PostgreSQL is not running or not listening on that address. Start it (`docker compose up -d postgres`) and check `ConnectionStrings:DefaultConnection`; the API retries `Database:ConnectAttempts` times (default 10, 3 s apart) before giving up.
 - **Database readiness stays unhealthy:** inspect `docker compose logs postgres`; confirm the configured database/user/password and ensure local port 5432 is available.
 - **API container exits during startup:** inspect `docker compose logs api`. The API requires the PostgreSQL health check and complete bootstrap username/password settings.
 - **Login fails for the bootstrap user:** the account is only created when it does not exist yet. If the database volume already contains the user, the existing password still applies; reset the volume (`docker compose down -v`) to re-seed in a demo environment.
