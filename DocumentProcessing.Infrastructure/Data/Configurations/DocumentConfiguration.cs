@@ -19,6 +19,7 @@ public class DocumentConfiguration : IEntityTypeConfiguration<Document>
         builder.Property(d => d.CreatedAtUtc).IsRequired();
         builder.Property(d => d.FileSize).IsRequired();
         builder.Property(d => d.OwnerId).HasMaxLength(450);
+        builder.Property(d => d.AiModelType).IsRequired().HasDefaultValue(DocumentProcessing.Domain.Enums.AiModelType.Cloud).HasSentinel((DocumentProcessing.Domain.Enums.AiModelType)(-1));
 
         builder.HasIndex(d => d.CreatedAtUtc);
         builder.HasIndex(d => d.Status);

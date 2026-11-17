@@ -32,15 +32,23 @@ Standard ASP.NET Core configuration: `appsettings*.json`, then environment varia
 
 | Key | Default | Notes |
 |---|---|---|
-| `Ai:Provider` | `Fake` | `Fake` (empty results, no key) or `OpenAI` |
-| `Ai:Endpoint` | `https://api.openai.com/v1/` | Any OpenAI-compatible Chat Completions base URL |
-| `Ai:ApiKey` | | Required for `OpenAI`. Treat as a secret |
-| `Ai:ApiKeyHeader` | `Authorization` | Use `api-key` for Azure OpenAI |
-| `Ai:ModelName` | `gpt-4o-mini` | Must support structured outputs (`json_schema`) |
-| `Ai:MaxOutputTokens` | `4096` | |
-| `Ai:AttemptTimeoutSeconds` / `TotalTimeoutSeconds` | `60` / `180` | |
-| `Ai:MaxRetryAttempts` | `3` | HTTP-level retries inside one queue attempt |
-| `Ai:InputCostPerMillionTokens` / `OutputCostPerMillionTokens` | `0` | Feeds the `ai.cost` metric |
+| `Ai:DefaultModelType` | `Cloud` | `Cloud` or `Local`: the model for users who have not chosen one. Must point at an enabled model |
+| `Ai:Fallback:Mode` | `None` | What happens when the chosen model fails; see [Cloud and local models](#cloud-and-local-models) |
+| `Ai:Cloud:Provider` | `Fake` | `Fake` (empty results, no key), `OpenAI` (OpenAI, Azure OpenAI or any OpenAI-compatible API), `Anthropic` or `None` |
+| `Ai:Cloud:Endpoint` | provider default | `https://api.openai.com/v1/` for `OpenAI`, `https://api.anthropic.com/v1/` for `Anthropic` |
+| `Ai:Cloud:ApiKey` | | Required for `OpenAI` and `Anthropic`. Treat as a secret |
+| `Ai:Cloud:ApiKeyHeader` | `Authorization` | `OpenAI` only. Use `api-key` for Azure OpenAI |
+| `Ai:Cloud:ModelName` | `gpt-4o-mini` | Must support structured outputs (`json_schema`) or, for Anthropic, tool use |
+| `Ai:Local:Provider` | `None` | `None` (disabled), `OpenAI` (Ollama, llama.cpp `llama-server`, vLLM, LM Studio) or `Fake` |
+| `Ai:Local:Endpoint` | `http://localhost:11434/v1/` | Ollama's default. llama.cpp: `http://localhost:8080/v1/` |
+| `Ai:Local:ApiKey` | | Optional; only if your local server requires one |
+| `Ai:Local:ModelName` | | Required when enabled, e.g. `llama3.1:8b` or `qwen2.5:7b`. Must support JSON-schema output |
+| `Ai:{Cloud\|Local}:MaxOutputTokens` | `4096` | |
+| `Ai:{Cloud\|Local}:AttemptTimeoutSeconds` / `TotalTimeoutSeconds` | `60` / `180` | Local models on CPU can need more |
+| `Ai:{Cloud\|Local}:MaxRetryAttempts` | `3` | HTTP-level retries inside one queue attempt |
+| `Ai:{Cloud\|Local}:InputCostPerMillionTokens` / `OutputCostPerMillionTokens` | `0` | Feeds the `ai.cost` metric |
+
+Older configuration with flat keys (`Ai:Provider`, `Ai:Endpoint`, `Ai:ApiKey`, `Ai:ModelName`, ...) and no `Ai:Cloud` section still works: it is read as the cloud model.
 | `QueueProcessing:BatchSize` | `4` | Commands claimed per poll; also the parallelism |
 | `QueueProcessing:PollInterval` | `00:00:05` | |
 | `QueueProcessing:LeaseDuration` | `00:05:00` | Must exceed `Ai:TotalTimeoutSeconds` |
@@ -72,7 +80,9 @@ Standard ASP.NET Core configuration: `appsettings*.json`, then environment varia
 | `WORKER_SQL_LOG_LEVEL` | Worker `Microsoft.EntityFrameworkCore.Database.Command` log level (default `Warning`) |
 | `MAX_FILE_SIZE_BYTES` | `DocumentService:MaxFileSizeBytes` |
 | `DEMO_ADMIN_USERNAME`, `DEMO_ADMIN_PASSWORD`, `DEMO_ADMIN_EMAIL` | `Authentication:Bootstrap:*` |
-| `AI_PROVIDER`, `AI_ENDPOINT`, `AI_API_KEY`, `AI_MODEL` | `Ai:*` (worker) |
+| `AI_PROVIDER`, `AI_ENDPOINT`, `AI_API_KEY`, `AI_MODEL` | `Ai:Cloud:*` (worker) |
+| `AI_LOCAL_PROVIDER`, `AI_LOCAL_ENDPOINT`, `AI_LOCAL_MODEL` | `Ai:Local:*` (API and worker) |
+| `AI_DEFAULT_MODEL_TYPE`, `AI_FALLBACK_MODE` | `Ai:DefaultModelType`, `Ai:Fallback:Mode` (API and worker) |
 | `FILE_STORAGE_PROVIDER`, `AZURE_BLOB_*` | `FileStorage:*` |
 | `LOG_FORMAT` | `Logging:Console:FormatterName` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP export |
@@ -87,3 +97,43 @@ AI_MODEL=<deployment>
 ```
 
 Also set `Ai__ApiKeyHeader=api-key` on the worker. Check the endpoint and API-version format against your Azure OpenAI resource; this setup has not been tested against a live endpoint yet.
+
+## Cloud and local models
+
+Each user chooses **Cloud** or **Local** in the "AI model for new uploads" dropdown in the page header. The choice is saved on their user account (`AspNetUsers.PreferredAiModelType`), so it survives signing out and applies on every device. Each upload records the model type it was made with (`Documents.AiModelType`); the worker extracts with that model, so changing the dropdown never affects documents already in the queue.
+
+The API and the worker must use the same `Ai:*` settings: the API uses them to offer and validate the choice, the worker to call the model.
+
+**Validation.** All `Ai:*` settings are checked at startup and every problem is reported at once, for example:
+
+```text
+Invalid AI configuration: Ai:Cloud:ApiKey is required for provider 'OpenAI'. Ai:Local:ModelName is required for provider 'OpenAI'.
+```
+
+A model type with provider `None` is shown in the dropdown as "not configured" and cannot be selected. The dropdown also checks each enabled model (`GET /api/settings/ai?check=true`): it calls the endpoint's `models` list with a 5-second timeout and warns when the endpoint is unreachable, the API key is rejected or, for local runtimes, the model is not installed (`Model 'llama3.1' is not installed on the local runtime at http://localhost:11434/v1/. For Ollama, run 'ollama pull llama3.1'.`).
+
+**When the chosen model fails** (unreachable, timed out, HTTP 5xx or rejected credentials):
+
+| `Ai:Fallback:Mode` | Behaviour |
+|---|---|
+| `None` (default) | The queue retries the document with the same model (`QueueProcessing:MaxAttempts`). When the attempts run out, the document is `Failed` and its page says why and offers "Switch to the other model and retry" (`POST /api/documents/{id}/retry-with-model`). Nothing is sent to another model without the user's action |
+| `Automatic` | The other enabled model is tried immediately. A successful result gets the warning "Processed with the Cloud model (...) because the Local model failed: ...", and the review page shows which model produced it. If both fail, the error names both |
+
+`None` is the default because `Automatic` can send a document that a user chose to keep local to a cloud API. Only enable it when that is acceptable for your data. A model type that is not configured at all (for example after `Ai:Local:Provider` was set back to `None` while documents were queued for it) fails the document immediately rather than retrying.
+
+### Running a local model with Ollama
+
+```bash
+docker compose --profile local-llm up -d ollama
+docker compose exec ollama ollama pull llama3.1:8b
+```
+
+Then set in `.env`:
+
+```text
+AI_LOCAL_PROVIDER=OpenAI
+AI_LOCAL_ENDPOINT=http://ollama:11434/v1/
+AI_LOCAL_MODEL=llama3.1:8b
+```
+
+and restart the API and worker. For llama.cpp, start `llama-server -m model.gguf --port 8080` and point `AI_LOCAL_ENDPOINT` at `http://host.docker.internal:8080/v1/`. Score a local model on the evaluation set before relying on it; small models are noticeably less accurate than hosted ones.

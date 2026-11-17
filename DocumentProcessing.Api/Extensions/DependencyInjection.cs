@@ -1,3 +1,4 @@
+using DocumentProcessing.Application.Services.Ai;
 using DocumentProcessing.Application.Services;
 using DocumentProcessing.Application.Services.TextExtraction;
 using DocumentProcessing.Domain.Interfaces;
@@ -28,6 +29,7 @@ public static class DependencyInjection
             .AddRoles<IdentityRole>()
             .AddEntityFrameworkStores<AppDbContext>();
         services.AddScoped<IUserService, IdentityUserService>();
+        services.AddScoped<IAiModelPreferenceStore, IdentityAiModelPreferenceStore>();
         return services;
     }
 
@@ -47,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<IDocumentTextExtractionService, DocumentTextExtractionService>();
 
         services.AddInvoiceExtraction(configuration);
+        services.AddScoped<AiModelSettingsService>();
         return services;
     }
 

@@ -103,6 +103,16 @@ public class DocumentDetailDto
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? LastProcessedAtUtc { get; set; }
 
+    /// <summary>Model type chosen for this document (<c>Cloud</c> or <c>Local</c>).</summary>
+    public string AiModelType { get; set; } = string.Empty;
+
+    /// <summary>Model type and name that produced the latest result, after any fallback.</summary>
+    public string? ProcessedWithModelType { get; set; }
+    public string? ProcessedWithModelName { get; set; }
+
+    /// <summary>Why processing failed, when <see cref="Status"/> is <c>Failed</c>.</summary>
+    public string? FailureReason { get; set; }
+
     public string ReviewStatus { get; set; } = string.Empty;
     public string? ReviewedBy { get; set; }
     public DateTime? ReviewedAtUtc { get; set; }

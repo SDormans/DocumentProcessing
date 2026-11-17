@@ -5,6 +5,7 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 ### Added
+- Choice between a cloud and a local AI model: a dropdown in the header saves each user's choice (`GET/PUT /api/settings/ai`), each upload records it, and the worker extracts with it. Settings under `Ai:Cloud:*`, `Ai:Local:*`, `Ai:DefaultModelType` and `Ai:Fallback:Mode`, validated at startup. Local runtimes (Ollama, llama.cpp) use the OpenAI-compatible API; a new `AnthropicProvider` supports Claude. Failed documents show why and can be retried with the other model (`POST /api/documents/{id}/retry-with-model`); `Ai:Fallback:Mode=Automatic` switches models without asking. Optional `ollama` service under the `local-llm` Compose profile. See ADR 0007.
 - Real-model evaluation: `npm run evaluate:predict` runs the production prompt, AI provider and validation over the corpus (`tools/DocumentProcessing.Evaluation`), `npm run evaluate:report` scores it. `.github/workflows/evaluation.yml` does both nightly and on demand when the `AI_API_KEY` secret is set.
 - OCR for scanned PDFs: pages without a text layer are rendered with `pdftoppm` and read with the `tesseract` CLI (English + Dutch), installed in the worker image. Digital PDFs skip OCR. Settings under `Ocr:*`.
 - Documents whose text exceeds the 48,000-character prompt limit get a warning saying the text was truncated.

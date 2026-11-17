@@ -94,7 +94,8 @@ public class DocumentServiceTests
             ContentType = d.ContentType,
             FileSize = d.FileSize,
             Status = d.Status.ToString(),
-            CreatedAtUtc = d.CreatedAtUtc
+            CreatedAtUtc = d.CreatedAtUtc,
+            AiModelType = d.AiModelType.ToString()
         }));
     }
 

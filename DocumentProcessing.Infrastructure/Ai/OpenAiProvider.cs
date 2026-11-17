@@ -26,9 +26,14 @@ public class OpenAiProvider : IAiProvider
     private readonly ILogger<OpenAiProvider> _logger;
 
     public OpenAiProvider(HttpClient httpClient, IOptions<AiOptions> options, ILogger<OpenAiProvider> logger)
+        : this(httpClient, options.Value, logger)
+    {
+    }
+
+    public OpenAiProvider(HttpClient httpClient, AiOptions options, ILogger<OpenAiProvider> logger)
     {
         _httpClient = httpClient;
-        _options = options.Value;
+        _options = options;
         _logger = logger;
     }
 
@@ -151,8 +156,7 @@ public class OpenAiProvider : IAiProvider
 
     internal static void ConfigureClient(HttpClient client, AiOptions options)
     {
-        var endpoint = options.Endpoint.EndsWith('/') ? options.Endpoint : options.Endpoint + "/";
-        client.BaseAddress = new Uri(endpoint);
+        client.BaseAddress = new Uri(AiProviderRegistry.WithTrailingSlash(options.Endpoint));
         client.Timeout = Timeout.InfiniteTimeSpan;
 
         if (string.IsNullOrWhiteSpace(options.ApiKey))

@@ -15,7 +15,7 @@ An ASP.NET Core and React platform for invoice PDFs: upload, queued background e
 |---|---|---|
 | Goal | Show an invoice-processing architecture in a hackathon demo | Turn the prototype into a working, measured, tested project |
 | Upload, storage, review UI | Working | Working |
-| AI extraction | Implemented, run by the worker | `InvoiceExtractor` extracts PDF text, calls an OpenAI-compatible Chat Completions endpoint with a strict JSON schema, then runs deterministic validation. Configured with `Ai:*`; `Ai:Provider=Fake` (default) needs no key. Uploads now create a queue command. |
+| AI extraction | Implemented, run by the worker | `InvoiceExtractor` extracts PDF text, calls an OpenAI-compatible Chat Completions endpoint with a strict JSON schema, then runs deterministic validation. Configured with `Ai:*`; `Ai:Provider=Fake` (default) needs no key. Users choose a cloud (OpenAI, Azure OpenAI, Anthropic) or local (Ollama, llama.cpp) model per upload; see [Configuration](./docs/wiki/Configuration.md#cloud-and-local-models). Uploads now create a queue command. |
 | Evaluation | Harness and 50-invoice synthetic corpus, no model results | Planned: published scorecard with accuracy, latency and cost per invoice |
 | Integration tests | Controller-level, mocked | Real API host and PostgreSQL via Testcontainers: migrations, auth, upload → extraction → review |
 | Background processing | Implemented | `DocumentProcessing.Worker` claims `QueueCommands` with a lease (`FOR UPDATE SKIP LOCKED`), runs extraction and validation, stores the result and moves the document to `NeedsReview`. Retries are bounded with exponential backoff. See [ADR 0001](./docs/adr/0001-database-backed-queue.md). |

@@ -17,7 +17,7 @@ namespace DocumentProcessing.Infrastructure.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.0")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -26,6 +26,9 @@ namespace DocumentProcessing.Infrastructure.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
+
+                    b.Property<int?>("AiModelType")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Currency")
                         .HasColumnType("text");
@@ -78,6 +81,10 @@ namespace DocumentProcessing.Infrastructure.Data.Migrations
                     b.Property<bool>("LinesHasValue")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("ModelName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<int>("PageCount")
                         .HasColumnType("integer");
 
@@ -126,6 +133,11 @@ namespace DocumentProcessing.Infrastructure.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("AiModelType")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
 
                     b.Property<string>("ContentHash")
                         .IsRequired()
@@ -423,6 +435,9 @@ namespace DocumentProcessing.Infrastructure.Data.Migrations
 
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("boolean");
+
+                    b.Property<int?>("PreferredAiModelType")
+                        .HasColumnType("integer");
 
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");

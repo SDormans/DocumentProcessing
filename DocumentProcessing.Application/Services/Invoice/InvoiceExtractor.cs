@@ -1,4 +1,6 @@
 using System.Text;
+using DocumentProcessing.Application.Services.Ai;
+using DocumentProcessing.Domain.Enums;
 using DocumentProcessing.Domain.Interfaces;
 using DocumentProcessing.Domain.Models;
 using Microsoft.Extensions.Logging;
@@ -17,7 +19,7 @@ public class InvoiceExtractor : IInvoiceExtractor
     private readonly IDocumentRepository _documentRepository;
     private readonly IFileStorage _fileStorage;
     private readonly IDocumentTextExtractor _textExtractor;
-    private readonly IAiProvider _aiProvider;
+    private readonly IAiProviderRegistry _aiProviders;
     private readonly ILogger<InvoiceExtractor> _logger;
     private readonly ValidationService _validationService;
     private readonly decimal? _maxCost;
@@ -26,7 +28,7 @@ public class InvoiceExtractor : IInvoiceExtractor
         IDocumentRepository documentRepository,
         IFileStorage fileStorage,
         IDocumentTextExtractor textExtractor,
-        IAiProvider aiProvider,
+        IAiProviderRegistry aiProviders,
         ILogger<InvoiceExtractor> logger,
         ValidationService validationService,
         IOptions<InvoiceExtractionOptions>? options = null)
@@ -35,7 +37,7 @@ public class InvoiceExtractor : IInvoiceExtractor
         _documentRepository = documentRepository;
         _fileStorage = fileStorage;
         _textExtractor = textExtractor;
-        _aiProvider = aiProvider;
+        _aiProviders = aiProviders;
         _logger = logger;
         _validationService = validationService;
     }
@@ -68,7 +70,7 @@ public class InvoiceExtractor : IInvoiceExtractor
             ExtractionTelemetry.Extractions.Add(1,
                 new KeyValuePair<string, object?>("success", false),
                 new KeyValuePair<string, object?>("correction_pass", false),
-                new KeyValuePair<string, object?>("error.type", ex.GetType().FullName));
+                new KeyValuePair<string, object?>("error.type", (ex is AiModelUnavailableException { InnerException: { } cause } ? cause : ex).GetType().FullName));
             throw;
         }
 
@@ -107,11 +109,12 @@ public class InvoiceExtractor : IInvoiceExtractor
         }
 
         InvoiceExtractionResult result;
+        var budgetWarnings = new List<string>();
+        AiModelType modelType;
         using (ExtractionTelemetry.Stage(ExtractionTelemetry.LlmExtraction))
-            result = await _aiProvider.ExtractAsync(BuildPrompt(text.FullText), cancellationToken);
+            (result, modelType) = await CallModelAsync(document.AiModelType, BuildPrompt(text.FullText), budgetWarnings, cancellationToken);
         var version = 1;
         var cost = result.EstimatedCost;
-        var budgetWarnings = new List<string>();
 
         if (result.Success)
         {
@@ -129,7 +132,7 @@ public class InvoiceExtractor : IInvoiceExtractor
                 using (var stage = ExtractionTelemetry.Stage(ExtractionTelemetry.LlmExtraction))
                 {
                     stage.Activity?.SetTag("extraction.correction_pass", true);
-                    corrected = await _aiProvider.ExtractAsync(
+                    corrected = await _aiProviders.Get(modelType).ExtractAsync(
                         BuildCorrectionPrompt(text.FullText, result.RawResponse ?? string.Empty, issues), cancellationToken);
                 }
                 if (corrected.EstimatedCost is { } correctionCost)
@@ -144,6 +147,8 @@ public class InvoiceExtractor : IInvoiceExtractor
         }
 
         result.ExtractionMethod = $"Llm+{text.Method}";
+        result.ModelType = modelType;
+        result.ModelName = ModelNameOf(modelType);
         result.ExtractionVersion = version;
         result.PageCount = text.PageCount;
         result.TotalCharacterCount = text.TotalCharacterCount;
@@ -172,6 +177,61 @@ public class InvoiceExtractor : IInvoiceExtractor
 
         return result;
     }
+
+    /// <summary>
+    /// Calls the requested model. When it throws (unreachable, timed out, rejected credentials) and fallback is
+    /// <see cref="AiFallbackMode.Automatic"/>, the other enabled model is tried; otherwise the failure surfaces as an
+    /// <see cref="AiModelUnavailableException"/> with a message for the user.
+    /// </summary>
+    private async Task<(InvoiceExtractionResult Result, AiModelType ModelType)> CallModelAsync(
+        AiModelType requested, string prompt, List<string> warnings, CancellationToken cancellationToken)
+    {
+        Exception failure;
+        try
+        {
+            return (await _aiProviders.Get(requested).ExtractAsync(prompt, cancellationToken), requested);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+
+        var reason = Describe(requested, failure);
+        var alternative = requested == AiModelType.Cloud ? AiModelType.Local : AiModelType.Cloud;
+        if (_aiProviders.FallbackMode != AiFallbackMode.Automatic || !_aiProviders.IsEnabled(alternative))
+        {
+            _logger.LogWarning(failure, "The {ModelType} model failed and no fallback is configured.", requested);
+            throw failure as AiModelUnavailableException
+                ?? new AiModelUnavailableException(requested, reason, innerException: failure);
+        }
+
+        _logger.LogWarning(failure, "The {ModelType} model failed; falling back to the {Fallback} model.", requested, alternative);
+        ExtractionTelemetry.Fallbacks.Add(1,
+            new KeyValuePair<string, object?>("from", requested.ToString()),
+            new KeyValuePair<string, object?>("to", alternative.ToString()));
+        try
+        {
+            var result = await _aiProviders.Get(alternative).ExtractAsync(prompt, cancellationToken);
+            warnings.Add($"Processed with the {alternative} model ({ModelNameOf(alternative)}) because the {requested} model failed: {reason}");
+            return (result, alternative);
+        }
+        catch (Exception ex) when (!(ex is OperationCanceledException && cancellationToken.IsCancellationRequested))
+        {
+            throw new AiModelUnavailableException(requested,
+                $"{reason} The fallback {alternative} model also failed: {Describe(alternative, ex)}", innerException: ex);
+        }
+    }
+
+    private string Describe(AiModelType modelType, Exception ex) => ex is AiModelUnavailableException
+        ? ex.Message
+        : $"The {modelType} model ({ModelNameOf(modelType)}) could not be reached: {ex.Message}";
+
+    private string ModelNameOf(AiModelType modelType) =>
+        _aiProviders.Options.FirstOrDefault(o => o.ModelType == modelType)?.ModelName ?? modelType.ToString();
 
     private async Task ValidateAsync(InvoiceExtractionResult result, CancellationToken cancellationToken)
     {

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DocumentReviewForm } from './DocumentReviewForm';
 import { ApproveRejectButtons } from './ApproveRejectButtons';
 import { DocumentPreview } from './DocumentPreview';
+import { ModelFailureNotice } from './ModelFailureNotice';
 import { blockingResults, isDecided, useDocumentReview } from '../hooks/useDocumentReview';
 
 interface DocumentSummary {
@@ -54,6 +55,20 @@ export const DocumentDetail: React.FC = () => {
         Status: {detail?.status ?? document.status} · Review: {detail?.reviewStatus ?? '-'} ·
         Created: {new Date(document.createdAtUtc).toLocaleDateString()}
       </p>
+      {detail && (
+        <p className="model-info">
+          AI model: {detail.aiModelType}
+          {detail.processedWithModelName && ` · processed with ${detail.processedWithModelType} (${detail.processedWithModelName})`}
+        </p>
+      )}
+      {detail?.status === 'Failed' && detail.failureReason && documentId && (
+        <ModelFailureNotice
+          documentId={documentId}
+          failureReason={detail.failureReason}
+          modelType={detail.aiModelType}
+          onRetried={() => window.location.reload()}
+        />
+      )}
       {detail?.rejectionReason && <p>Rejection reason: {detail.rejectionReason}</p>}
 
       <div className="review-layout">

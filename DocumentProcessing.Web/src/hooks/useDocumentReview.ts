@@ -22,6 +22,10 @@ export interface ReviewDetail {
   reviewStatus: string;
   contentUrl: string | null;
   rejectionReason: string | null;
+  aiModelType: string;
+  processedWithModelType: string | null;
+  processedWithModelName: string | null;
+  failureReason: string | null;
   extractedFields: ReviewField[];
   validationResults: ValidationResult[];
 }

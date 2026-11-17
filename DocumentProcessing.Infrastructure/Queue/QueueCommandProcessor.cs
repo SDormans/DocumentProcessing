@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using DocumentProcessing.Application.Services.Ai;
 using DocumentProcessing.Application.Services.Invoice;
 using DocumentProcessing.Domain.Entities;
 using DocumentProcessing.Infrastructure.Data;
@@ -136,6 +137,14 @@ public class QueueCommandProcessor
             await _dbContext.SaveChangesAsync(CancellationToken.None);
             throw;
         }
+        catch (AiModelUnavailableException ex) when (ex.IsConfigurationError)
+        {
+            // Retrying cannot fix configuration; fail now so the user can retry with the other model.
+            _logger.LogWarning("Document {DocumentId} cannot be processed: {Reason}", document.Id, ex.Message);
+            await AddResultAsync(document.Id, InvoiceExtractionResult.FailureResult(ex.Message), cancellationToken);
+            await FailAsync(command, document, "AiModelNotConfigured", cancellationToken);
+            return QueueCommandOutcome.Failed;
+        }
         catch (Exception ex)
         {
             return await HandleTransientFailureAsync(command, document, ex, cancellationToken);
@@ -165,6 +174,8 @@ public class QueueCommandProcessor
         if (command.AttemptCount >= _options.MaxAttempts)
         {
             _logger.LogError(ex, "Processing document {DocumentId} failed on final attempt {Attempt}.", document.Id, command.AttemptCount);
+            if (ex is AiModelUnavailableException unavailable)
+                await AddResultAsync(document.Id, InvoiceExtractionResult.FailureResult(unavailable.Message), cancellationToken);
             await FailAsync(command, document, category, cancellationToken);
             return QueueCommandOutcome.Failed;
         }
@@ -223,6 +234,8 @@ public class QueueCommandProcessor
             LinesHasValue = result.LinesHasValue,
             LineItemsJson = result.Lines is { Count: > 0 } ? JsonSerializer.Serialize(result.Lines) : null,
             WarningsJson = JsonSerializer.Serialize(warnings),
+            AiModelType = result.ModelType,
+            ModelName = result.ModelName is null ? null : Truncate(result.ModelName, 200),
             ExtractedAtUtc = DateTime.UtcNow
         });
     }

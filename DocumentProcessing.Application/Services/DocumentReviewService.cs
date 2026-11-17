@@ -93,6 +93,10 @@ public class DocumentReviewService : IDocumentReviewService
             ReviewedAtUtc = review?.ReviewedAtUtc,
             ReviewDecision = review?.ReviewDecision,
             RejectionReason = review?.RejectionReason,
+            AiModelType = document.AiModelType.ToString(),
+            ProcessedWithModelType = invoiceResult?.AiModelType?.ToString(),
+            ProcessedWithModelName = invoiceResult?.ModelName,
+            FailureReason = document.Status == DocumentStatus.Failed ? invoiceResult?.ErrorMessage ?? "Processing failed. Retry the document or contact an administrator." : null,
             ContentUrl = $"/api/documents/{documentId}/content",
             ExtractedFields = fields,
             ValidationResults = validationResults

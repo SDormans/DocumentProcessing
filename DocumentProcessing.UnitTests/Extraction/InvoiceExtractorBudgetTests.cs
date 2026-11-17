@@ -35,7 +35,7 @@ public class InvoiceExtractorBudgetTests
                 Method = TextExtractionMethod.Native,
                 Pages = new List<ExtractedPage> { new() { PageNumber = 1, Text = text } }
             });
-        var extractor = new InvoiceExtractor(repository.Object, storage.Object, textExtractor.Object, ai.Object,
+        var extractor = new InvoiceExtractor(repository.Object, storage.Object, textExtractor.Object, TestAiProviders.For(ai.Object),
             NullLogger<InvoiceExtractor>.Instance,
             new ValidationService(new IInvoiceValidationRule[] { new MissingRequiredFieldsValidationRule() }),
             Options.Create(new InvoiceExtractionOptions { MaxCostPerDocument = budget }));
