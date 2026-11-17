@@ -20,7 +20,8 @@ In Development, Swagger UI is available at `/swagger`.
 | POST | `/api/documents` | Signed in; 20/min per user | `multipart/form-data`, field `file`. `201`, `400` validation, `413` too large |
 | GET | `/api/documents` | Signed in | Own documents; all for unrestricted roles |
 | GET | `/api/documents/{id}` | Signed in, owner | `404` if missing **or not yours** |
-| GET | `/api/documents/{id}/content` | Signed in, owner | The PDF |
+| GET | `/api/documents/{id}/content` | Signed in, owner | The PDF; `404` for `Quarantined` documents |
+| DELETE | `/api/documents/{id}` | `IsAdmin` | Erases the document, file, results, review and audit trail. `204`, `404` |
 
 ## Review
 

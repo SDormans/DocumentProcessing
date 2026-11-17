@@ -1,4 +1,6 @@
 using DocumentProcessing.Application.Services;
+using DocumentProcessing.Infrastructure.Retention;
+using DocumentProcessing.Application.Services;
 using DocumentProcessing.Domain.Interfaces;
 using DocumentProcessing.Infrastructure.Data;
 using DocumentProcessing.Infrastructure.Data.Repositories;
@@ -28,6 +30,8 @@ public static class PersistenceServiceCollectionExtensions
         services.AddScoped<IInvoiceResultRepository, InvoiceResultRepository>();
         services.AddScoped<IQueueCommandRepository, QueueCommandRepository>();
         services.AddScoped<IProcessingQueue, DbProcessingQueue>();
+        services.Configure<RetentionOptions>(configuration.GetSection(RetentionOptions.SectionName));
+        services.AddScoped<IDocumentDeletion, DocumentDeletion>();
         services.AddFileStorage(configuration);
         return services;
     }

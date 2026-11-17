@@ -34,6 +34,8 @@ public class DocumentProcessingWorker : BackgroundService
             try
             {
                 claimed = await ProcessBatchAsync(stoppingToken);
+                if (DateTime.UtcNow >= _nextRetentionPurgeUtc)
+                    await PurgeExpiredDocumentsAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -59,6 +61,19 @@ public class DocumentProcessingWorker : BackgroundService
         }
 
         _logger.LogInformation("Document processing worker {WorkerId} stopped.", _workerId);
+    }
+
+    private DateTime _nextRetentionPurgeUtc = DateTime.MinValue;
+
+    internal async Task PurgeExpiredDocumentsAsync(CancellationToken stoppingToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var options = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<DocumentProcessing.Application.Services.RetentionOptions>>().Value;
+        _nextRetentionPurgeUtc = DateTime.UtcNow + options.PurgeInterval;
+        var deleted = await scope.ServiceProvider.GetRequiredService<DocumentProcessing.Application.Services.IDocumentDeletion>()
+            .PurgeExpiredAsync(DateTime.UtcNow, stoppingToken);
+        if (deleted > 0)
+            _logger.LogInformation("Deleted {Count} document(s) past their retention period.", deleted);
     }
 
     internal async Task<int> ProcessBatchAsync(CancellationToken stoppingToken)

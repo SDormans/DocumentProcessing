@@ -56,6 +56,14 @@ Standard ASP.NET Core configuration: `appsettings*.json`, then environment varia
 | `MalwareScanning:ClamAvHost`, `ClamAvPort` | `clamav`, `3310` | `clamd` address |
 | `MalwareScanning:TimeoutSeconds` | `60` | Per file; a timeout is retried like any transient error |
 
+## Retention (`Retention:*`)
+
+| Key | Default | Notes |
+|---|---|---|
+| `Retention:CompletedDocumentRetention` | `2557.00:00:00` (7 years) | Set on approval as `RetainUntilUtc`. Agree the period with the data owner |
+| `Retention:PurgeInterval` | `01:00:00` | How often the worker deletes expired documents |
+| `Retention:PurgeBatchSize` | `100` | Documents deleted per run |
+
 ## Docker Compose (`.env`)
 
 | Variable | Maps to |

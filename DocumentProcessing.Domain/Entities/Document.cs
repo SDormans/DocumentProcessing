@@ -64,6 +64,17 @@ public class Document
     /// </summary>
     public DateTime? LastProcessedAtUtc { get; private set; }
 
+    /// <summary>
+    /// When the document and everything derived from it is deleted. Set when the review completes;
+    /// null means kept until deleted by an admin.
+    /// </summary>
+    public DateTime? RetainUntilUtc { get; private set; }
+
+    public void SetRetention(DateTime retainUntilUtc)
+    {
+        RetainUntilUtc = retainUntilUtc;
+    }
+
     public static Document Create(
         string originalFileName,
         string contentType,

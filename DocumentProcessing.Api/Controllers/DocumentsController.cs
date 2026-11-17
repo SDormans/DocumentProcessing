@@ -155,4 +155,17 @@ public class DocumentsController : ControllerBase
             });
         }
     }
+
+    /// <summary>Erasure request: deletes the document, its file, results, review and audit trail.</summary>
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "IsAdmin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteDocument(
+        Guid id,
+        [FromServices] IDocumentDeletion deletion,
+        CancellationToken cancellationToken)
+    {
+        return await deletion.DeleteAsync(id, "AdminRequest", cancellationToken) ? NoContent() : NotFound();
+    }
 }

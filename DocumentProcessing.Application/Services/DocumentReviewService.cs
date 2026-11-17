@@ -23,6 +23,7 @@ public class DocumentReviewService : IDocumentReviewService
     private readonly ValidationService _validationService;
     private readonly ILogger<DocumentReviewService> _logger;
     private readonly ICurrentUser _currentUser;
+    private readonly TimeSpan _retention;
 
     public DocumentReviewService(
         IDocumentRepository documentRepository,
@@ -31,8 +32,10 @@ public class DocumentReviewService : IDocumentReviewService
         IInvoiceResultRepository invoiceResultRepository,
         ValidationService validationService,
         ILogger<DocumentReviewService> logger,
-        ICurrentUser currentUser)
+        ICurrentUser currentUser,
+        Microsoft.Extensions.Options.IOptions<RetentionOptions>? retentionOptions = null)
     {
+        _retention = (retentionOptions?.Value ?? new RetentionOptions()).CompletedDocumentRetention;
         _currentUser = currentUser;
         _documentRepository = documentRepository;
         _reviewRepository = reviewRepository;
@@ -242,6 +245,7 @@ public class DocumentReviewService : IDocumentReviewService
 
         document.MarkProcessed();
         document.UpdateStatus(Domain.Entities.DocumentStatus.Completed);
+        document.SetRetention(DateTime.UtcNow + _retention);
         await _reviewRepository.UpdateAsync(review, cancellationToken);
         await _documentRepository.UpdateAsync(document, cancellationToken);
         if (!await TrySaveAsync(documentId, cancellationToken))

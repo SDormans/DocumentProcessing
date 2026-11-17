@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using DocumentProcessing.Infrastructure.Data;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -20,7 +22,7 @@ public class MigrationTests(PostgresFixture postgres)
 
         await db.Database.MigrateAsync();
 
-        (await db.Database.GetAppliedMigrationsAsync()).Should().Equal(MigrationBaseline.BaselineMigrationId);
+        (await db.Database.GetAppliedMigrationsAsync()).Should().Equal(db.Database.GetMigrations());
         (await db.Database.GetPendingMigrationsAsync()).Should().BeEmpty();
         db.Database.HasPendingModelChanges().Should().BeFalse("the baseline must contain the whole current model");
     }
@@ -43,14 +45,14 @@ public class MigrationTests(PostgresFixture postgres)
     {
         var connectionString = await postgres.CreateDatabaseAsync();
         await using var db = CreateContext(connectionString);
-        await db.Database.MigrateAsync();
+        await db.GetService<IMigrator>().MigrateAsync(MigrationBaseline.BaselineMigrationId);
         await RewriteHistoryAsync(connectionString, MigrationBaseline.LegacyMigrationIds);
 
         var adopted = await MigrationBaseline.AdoptLegacyHistoryAsync(db, NullLogger.Instance);
         await db.Database.MigrateAsync();
 
         adopted.Should().BeTrue();
-        (await db.Database.GetAppliedMigrationsAsync()).Should().Equal(MigrationBaseline.BaselineMigrationId);
+        (await db.Database.GetAppliedMigrationsAsync()).Should().Equal(db.Database.GetMigrations());
     }
 
     [Fact]
@@ -61,7 +63,7 @@ public class MigrationTests(PostgresFixture postgres)
         (await MigrationBaseline.AdoptLegacyHistoryAsync(db, NullLogger.Instance)).Should().BeFalse();
         await db.Database.MigrateAsync();
 
-        (await db.Database.GetAppliedMigrationsAsync()).Should().Equal(MigrationBaseline.BaselineMigrationId);
+        (await db.Database.GetAppliedMigrationsAsync()).Should().Equal(db.Database.GetMigrations());
     }
 
     [Fact]
@@ -69,7 +71,7 @@ public class MigrationTests(PostgresFixture postgres)
     {
         var connectionString = await postgres.CreateDatabaseAsync();
         await using (var setup = CreateContext(connectionString))
-            await setup.Database.MigrateAsync();
+            await setup.GetService<IMigrator>().MigrateAsync(MigrationBaseline.BaselineMigrationId);
         await RewriteHistoryAsync(connectionString, MigrationBaseline.LegacyMigrationIds);
 
         // Hold back history writes (reads still pass) so every instance reads the legacy history before any commits.
@@ -111,7 +113,7 @@ public class MigrationTests(PostgresFixture postgres)
     {
         var connectionString = await postgres.CreateDatabaseAsync();
         await using var db = CreateContext(connectionString);
-        await db.Database.MigrateAsync();
+        await db.GetService<IMigrator>().MigrateAsync(MigrationBaseline.BaselineMigrationId);
         await RewriteHistoryAsync(connectionString, MigrationBaseline.LegacyMigrationIds.Take(5));
 
         var act = () => MigrationBaseline.AdoptLegacyHistoryAsync(db, NullLogger.Instance);
