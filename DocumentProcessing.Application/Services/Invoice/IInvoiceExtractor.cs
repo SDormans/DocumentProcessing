@@ -45,6 +45,15 @@ public class InvoiceExtractionResult
     public int PageCount { get; set; }
     public int TotalCharacterCount { get; set; }
 
+    /// <summary>Model type that produced this result (after any fallback); null when no model was called.</summary>
+    public DocumentProcessing.Domain.Enums.AiModelType? ModelType { get; set; }
+
+    /// <summary>Configured model name of <see cref="ModelType"/>.</summary>
+    public string? ModelName { get; set; }
+
+    /// <summary>Estimated AI cost from the configured token prices; null when unknown.</summary>
+    public decimal? EstimatedCost { get; set; }
+
     public static InvoiceExtractionResult Empty() => new()
     {
         ExtractionMethod = "Unknown",

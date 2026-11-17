@@ -128,6 +128,27 @@ public class DocumentsController : ControllerBase
     /// Returns the original PDF document via an authorized endpoint.
     /// </summary>
     /// <summary>
+    /// Re-queues a failed document with the given model type, e.g. to switch from an unavailable local model to the cloud model.
+    /// </summary>
+    [HttpPost("{id:guid}/retry-with-model")]
+    [EnableRateLimiting(RateLimitingSetup.UploadPolicy)]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RetryWithModel(Guid id, [FromBody] RetryWithModelRequest request, CancellationToken cancellationToken)
+    {
+        return await _documentService.RetryWithModelAsync(id, request.ModelType, cancellationToken) switch
+        {
+            ModelSwitchResult.Requeued => Accepted(new { id, status = "Queued", aiModelType = request.ModelType }),
+            ModelSwitchResult.NotFailed => Conflict(new { message = "Only failed documents can be retried with another model." }),
+            ModelSwitchResult.InvalidModel => BadRequest(new { message = $"Unknown model type '{request.ModelType}'. Use 'Cloud' or 'Local'." }),
+            ModelSwitchResult.ModelUnavailable => BadRequest(new { message = $"The {request.ModelType} model is not configured on this server." }),
+            _ => NotFound()
+        };
+    }
+
+    /// <summary>
     /// Re-queues a failed document for processing (admins only).
     /// </summary>
     [HttpPost("{id:guid}/requeue")]

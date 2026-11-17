@@ -26,9 +26,14 @@ public class OpenAiProvider : IAiProvider
     private readonly ILogger<OpenAiProvider> _logger;
 
     public OpenAiProvider(HttpClient httpClient, IOptions<AiOptions> options, ILogger<OpenAiProvider> logger)
+        : this(httpClient, options.Value, logger)
+    {
+    }
+
+    public OpenAiProvider(HttpClient httpClient, AiOptions options, ILogger<OpenAiProvider> logger)
     {
         _httpClient = httpClient;
-        _options = options.Value;
+        _options = options;
         _logger = logger;
     }
 
@@ -55,7 +60,7 @@ public class OpenAiProvider : IAiProvider
             response.EnsureSuccessStatusCode();
 
             var completion = JsonNode.Parse(body);
-            RecordUsage(completion, activity);
+            var cost = RecordUsage(completion, activity);
 
             var choice = completion?["choices"] is JsonArray { Count: > 0 } choices ? choices[0] : null;
             var message = choice?["message"];
@@ -64,23 +69,24 @@ public class OpenAiProvider : IAiProvider
             if (!string.IsNullOrWhiteSpace(refusal))
             {
                 outcome = "refused";
-                return InvoiceExtractionResult.FailureResult($"AI provider refused: {refusal}", body);
+                return WithCost(InvoiceExtractionResult.FailureResult($"AI provider refused: {refusal}", body), cost);
             }
 
             if (finishReason == "length")
             {
                 outcome = "truncated";
-                return InvoiceExtractionResult.FailureResult("AI response was truncated (max output tokens reached).", body);
+                return WithCost(InvoiceExtractionResult.FailureResult("AI response was truncated (max output tokens reached).", body), cost);
             }
 
             var content = message?["content"]?.GetValue<string>();
             if (string.IsNullOrWhiteSpace(content))
             {
                 outcome = "empty";
-                return InvoiceExtractionResult.FailureResult("AI response did not contain any content.", body);
+                return WithCost(InvoiceExtractionResult.FailureResult("AI response did not contain any content.", body), cost);
             }
 
             var result = InvoiceExtractionSchema.Parse(content);
+            result.EstimatedCost = cost;
             outcome = result.Success ? "success" : "schema_violation";
             return result;
         }
@@ -122,11 +128,17 @@ public class OpenAiProvider : IAiProvider
         }
     };
 
-    private void RecordUsage(JsonNode? completion, Activity? activity)
+    private static InvoiceExtractionResult WithCost(InvoiceExtractionResult result, decimal? cost)
+    {
+        result.EstimatedCost = cost;
+        return result;
+    }
+
+    private decimal? RecordUsage(JsonNode? completion, Activity? activity)
     {
         var usage = completion?["usage"];
         if (usage is null)
-            return;
+            return null;
 
         var input = usage["prompt_tokens"]?.GetValue<long>() ?? 0;
         var output = usage["completion_tokens"]?.GetValue<long>() ?? 0;
@@ -145,12 +157,12 @@ public class OpenAiProvider : IAiProvider
         _logger.LogInformation(
             "AI request used {InputTokens} input and {OutputTokens} output tokens on {Model} (estimated cost {Cost}).",
             input, output, _options.ModelName, cost);
+        return cost;
     }
 
     internal static void ConfigureClient(HttpClient client, AiOptions options)
     {
-        var endpoint = options.Endpoint.EndsWith('/') ? options.Endpoint : options.Endpoint + "/";
-        client.BaseAddress = new Uri(endpoint);
+        client.BaseAddress = new Uri(AiProviderRegistry.WithTrailingSlash(options.Endpoint));
         client.Timeout = Timeout.InfiniteTimeSpan;
 
         if (string.IsNullOrWhiteSpace(options.ApiKey))

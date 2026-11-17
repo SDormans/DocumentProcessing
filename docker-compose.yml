@@ -37,6 +37,16 @@ services:
       FileStorage__AzureBlob__ContainerName: ${AZURE_BLOB_CONTAINER:-documents}
       FileStorage__AzureBlob__CreateContainerIfNotExists: ${AZURE_BLOB_CREATE_CONTAINER:-false}
       DocumentService__MaxFileSizeBytes: ${MAX_FILE_SIZE_BYTES:-10485760}
+      # Same AI settings as the worker: the API offers, validates and probes the models users can choose.
+      Ai__Provider: ${AI_PROVIDER:-Fake}
+      Ai__Endpoint: ${AI_ENDPOINT:-https://api.openai.com/v1/}
+      Ai__ApiKey: ${AI_API_KEY:-}
+      Ai__ModelName: ${AI_MODEL:-gpt-4o-mini}
+      Ai__Local__Provider: ${AI_LOCAL_PROVIDER:-None}
+      Ai__Local__Endpoint: ${AI_LOCAL_ENDPOINT:-http://ollama:11434/v1/}
+      Ai__Local__ModelName: ${AI_LOCAL_MODEL:-llama3.1:8b}
+      Ai__DefaultModelType: ${AI_DEFAULT_MODEL_TYPE:-Cloud}
+      Ai__Fallback__Mode: ${AI_FALLBACK_MODE:-None}
       Authentication__Bootstrap__Username: ${DEMO_ADMIN_USERNAME:?Set DEMO_ADMIN_USERNAME in .env}
       Authentication__Bootstrap__Password: ${DEMO_ADMIN_PASSWORD:?Set DEMO_ADMIN_PASSWORD in .env}
       Authentication__Bootstrap__Email: ${DEMO_ADMIN_EMAIL:-demo-admin@example.invalid}
@@ -76,6 +86,11 @@ services:
       Ai__Endpoint: ${AI_ENDPOINT:-https://api.openai.com/v1/}
       Ai__ApiKey: ${AI_API_KEY:-}
       Ai__ModelName: ${AI_MODEL:-gpt-4o-mini}
+      Ai__Local__Provider: ${AI_LOCAL_PROVIDER:-None}
+      Ai__Local__Endpoint: ${AI_LOCAL_ENDPOINT:-http://ollama:11434/v1/}
+      Ai__Local__ModelName: ${AI_LOCAL_MODEL:-llama3.1:8b}
+      Ai__DefaultModelType: ${AI_DEFAULT_MODEL_TYPE:-Cloud}
+      Ai__Fallback__Mode: ${AI_FALLBACK_MODE:-None}
       Logging__Console__FormatterName: ${LOG_FORMAT:-}
       # The worker polls the queue every few seconds; don't log each SQL command.
       Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: ${WORKER_SQL_LOG_LEVEL:-Warning}
@@ -102,7 +117,19 @@ services:
       - "127.0.0.1:${WEB_PORT:-8081}:8080"
     restart: unless-stopped
 
+  # Optional local LLM runtime: docker compose --profile local-llm up -d ollama
+  ollama:
+    image: ollama/ollama:0.12.6
+    profiles: ["local-llm"]
+    volumes:
+      - ollama_models:/root/.ollama
+    ports:
+      - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"
+    restart: unless-stopped
+
 volumes:
+  ollama_models:
+    name: documentprocessing_ollama_models
   postgres_demo_data:
     name: documentprocessing_demo_postgres_data
   document_storage_demo:

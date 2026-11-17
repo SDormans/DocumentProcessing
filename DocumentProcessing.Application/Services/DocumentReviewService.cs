@@ -77,6 +77,8 @@ public class DocumentReviewService : IDocumentReviewService
                     AffectedFields = r.AffectedFields
                 })
                 .ToList();
+            if (invoiceResult.ErrorMessage is null)
+                validationResults.AddRange(ExtractionWarnings(invoiceResult.WarningsJson));
         }
 
         return new DocumentDetailDto
@@ -93,6 +95,10 @@ public class DocumentReviewService : IDocumentReviewService
             ReviewedAtUtc = review?.ReviewedAtUtc,
             ReviewDecision = review?.ReviewDecision,
             RejectionReason = review?.RejectionReason,
+            AiModelType = document.AiModelType.ToString(),
+            ProcessedWithModelType = invoiceResult?.AiModelType?.ToString(),
+            ProcessedWithModelName = invoiceResult?.ModelName,
+            FailureReason = document.Status == DocumentStatus.Failed ? invoiceResult?.ErrorMessage ?? "Processing failed. Retry the document or contact an administrator." : null,
             ContentUrl = $"/api/documents/{documentId}/content",
             ExtractedFields = fields,
             ValidationResults = validationResults
@@ -533,6 +539,35 @@ public class DocumentReviewService : IDocumentReviewService
             CorrectedValue = corrections.TryGetValue(name, out var corrected) ? corrected : null,
             ApprovedValue = approved != null && approved.TryGetValue(name, out var approvedValue) ? NullIfEmpty(approvedValue) : null
         }).ToList();
+    }
+
+    /// <summary>
+    /// Warnings stored at extraction time (truncation, OCR, budget, fallback, model ambiguity notes). Stored copies of
+    /// validation findings are skipped: validation is re-run on the current values above.
+    /// </summary>
+    private static IEnumerable<ValidationResultDto> ExtractionWarnings(string? warningsJson)
+    {
+        if (string.IsNullOrWhiteSpace(warningsJson))
+            return [];
+        List<string>? warnings;
+        try
+        {
+            warnings = JsonSerializer.Deserialize<List<string>>(warningsJson);
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+        return (warnings ?? [])
+            .Where(w => !string.IsNullOrWhiteSpace(w) && !InvoiceExtractor.IsValidationWarning(w))
+            .Distinct()
+            .Select(w => new ValidationResultDto
+            {
+                RuleId = "ExtractionWarning",
+                Status = "Warning",
+                Severity = "Warning",
+                Message = w
+            });
     }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;

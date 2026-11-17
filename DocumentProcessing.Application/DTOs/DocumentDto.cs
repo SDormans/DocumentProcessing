@@ -9,6 +9,7 @@ public class DocumentDto
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
     public string? OwnerId { get; set; }
+    public string AiModelType { get; set; } = string.Empty;
 }
 
 public class UploadDocumentResponse
@@ -30,4 +31,8 @@ public class DocumentFileDto
     public Stream Stream { get; set; } = Stream.Null;
     public string ContentType { get; set; } = "application/pdf";
     public string FileName { get; set; } = string.Empty;
+}
+public class RetryWithModelRequest
+{
+    public string? ModelType { get; set; }
 }

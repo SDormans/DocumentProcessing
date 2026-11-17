@@ -92,3 +92,24 @@ test("duplicate predictions are rejected", () => {
     /Duplicate prediction/
   );
 });
+
+test("fields a prediction marks as unscored are excluded from accuracy", () => {
+  const predictions = dataset.map(record => makePrediction(record, {
+    fields: { ...record.expected, lineItems: null },
+    unscoredFields: ["lineItems"]
+  }));
+  const report = evaluateDataset(dataset, predictions);
+
+  assert.equal(report.quality.schemaValidationFailures, 0);
+  assert.equal(report.quality.fieldAccuracy, 1);
+  assert.equal(report.quality.fields.lineItems.evaluatedCount, 0);
+  assert.equal(report.quality.fields.lineItems.accuracy, null);
+  assert.equal(report.quality.missingFieldCount, 0);
+});
+
+test("unknown unscored fields are a schema failure", () => {
+  const record = dataset[0];
+  const report = evaluateDataset([record], [makePrediction(record, { unscoredFields: ["notAField"] })]);
+
+  assert.equal(report.quality.schemaValidationFailures, 1);
+});

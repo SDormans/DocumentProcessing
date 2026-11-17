@@ -19,6 +19,9 @@ public static class ExtractionTelemetry
     public static readonly Counter<long> Extractions = Meter.CreateCounter<long>(
         "documentprocessing.extraction.results", description: "Finished invoice extractions, by outcome.");
 
+    public static readonly Counter<long> Fallbacks = Meter.CreateCounter<long>(
+        "documentprocessing.extraction.model_fallbacks", description: "Extractions that switched to the other AI model type after a failure.");
+
     public const string TextExtraction = "text_extraction";
     public const string LlmExtraction = "llm_extraction";
     public const string Validation = "validation";

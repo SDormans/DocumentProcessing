@@ -1,3 +1,4 @@
+using DocumentProcessing.Domain.Enums;
 using System.Net;
 using System.Net.Http.Json;
 using DocumentProcessing.Application.Services.Invoice;
@@ -46,6 +47,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("FileStorage:Provider", "Local");
         builder.UseSetting("FileStorage:BasePath", _storagePath);
         builder.UseSetting("Ai:Provider", "Fake");
+        builder.UseSetting("Ai:Local:Provider", "Fake");
         builder.UseSetting("Authentication:Bootstrap:Username", AdminUserName);
         builder.UseSetting("Authentication:Bootstrap:Password", AdminPassword);
         builder.UseSetting("Authentication:Bootstrap:Email", "admin@example.test");
@@ -55,8 +57,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<IAiProvider>();
-            services.AddScoped<IAiProvider>(_ =>
+            services.AddKeyedScoped<IAiProvider>(AiModelType.Cloud, (_, _) =>
                 new FakeAiProvider(true, InvoiceExtractionSchema.Parse(ExtractedInvoiceJson)));
+            services.AddKeyedScoped<IAiProvider>(AiModelType.Local, (_, _) =>
+                new FakeAiProvider(true, InvoiceExtractionSchema.Parse(ExtractedInvoiceJson)));
+            services.AddScoped<IAiProvider>(sp => sp.GetRequiredKeyedService<IAiProvider>(AiModelType.Cloud));
             // The worker's processor, so tests can drain the queue in-process.
             services.AddScoped<QueueCommandProcessor>();
         });

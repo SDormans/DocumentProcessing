@@ -17,6 +17,7 @@ namespace DocumentProcessing.Infrastructure.Data.Configurations
             builder.Property(d => d.ExtractionMethod).IsRequired().HasMaxLength(50);
             builder.Property(d => d.ErrorMessage).HasMaxLength(2000);
             builder.Property(d => d.ExtractedAtUtc).IsRequired();
+            builder.Property(d => d.ModelName).HasMaxLength(200);
 
             // Invoice-level fields
             builder.Property(d => d.SupplierNameHasValue).IsRequired();

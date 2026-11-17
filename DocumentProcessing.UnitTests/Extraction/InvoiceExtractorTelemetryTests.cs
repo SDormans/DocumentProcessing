@@ -1,3 +1,4 @@
+using DocumentProcessing.Application.Services.Ai;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using DocumentProcessing.Application.Services.Invoice;
@@ -81,7 +82,7 @@ public class InvoiceExtractorTelemetryTests
 
         var act = () => extractor.ExtractAsync(document.Id);
 
-        await act.Should().ThrowAsync<HttpRequestException>();
+        (await act.Should().ThrowAsync<AiModelUnavailableException>()).WithInnerException<HttpRequestException>();
         var root = spans.Should().ContainSingle(s => s.OperationName == "invoice.extract").Subject;
         root.Status.Should().Be(ActivityStatusCode.Error);
         root.GetTagItem("extraction.success").Should().Be(false);
@@ -103,7 +104,7 @@ public class InvoiceExtractorTelemetryTests
                 Method = TextExtractionMethod.Native,
                 Pages = new List<ExtractedPage> { new() { PageNumber = 1, Text = "Invoice INV-2026-001" } }
             });
-        var extractor = new InvoiceExtractor(repository.Object, storage.Object, textExtractor.Object, ai,
+        var extractor = new InvoiceExtractor(repository.Object, storage.Object, textExtractor.Object, TestAiProviders.For(ai),
             NullLogger<InvoiceExtractor>.Instance, new ValidationService(Array.Empty<IInvoiceValidationRule>()));
         return (extractor, document);
     }

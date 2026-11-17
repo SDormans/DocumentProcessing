@@ -64,7 +64,7 @@ Review status: `Pending` → `Corrected` → `Approved` or `Rejected`.
 ## Patterns
 
 - **Repositories**: services depend on the interfaces in `Domain/Interfaces`. Implementations live in `Infrastructure/Data/Repositories`. Nothing outside Infrastructure uses `AppDbContext` directly.
-- **Configuration-selected adapters**: `Ai:Provider` (Fake / OpenAI) and `FileStorage:Provider` (Local / AzureBlob).
+- **Configuration-selected adapters**: `Ai:Cloud:Provider` / `Ai:Local:Provider` (Fake / OpenAI / Anthropic / None) and `FileStorage:Provider` (Local / AzureBlob). Users choose the cloud or local model per upload; `IAiProviderRegistry` resolves it ([ADR 0007](../adr/0007-cloud-and-local-models.md)).
 - **Ownership**: `ICurrentUser.CanAccess(document)` is checked in the services, and an inaccessible document is reported as not found.
 
 Decisions behind these choices: [Architecture Decisions](Architecture-Decisions.md).

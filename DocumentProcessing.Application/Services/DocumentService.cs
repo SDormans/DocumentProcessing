@@ -1,3 +1,4 @@
+using DocumentProcessing.Application.Services.Ai;
 using DocumentProcessing.Application.DTOs;
 using DocumentProcessing.Application.Exceptions;
 using DocumentProcessing.Domain.Entities;
@@ -16,6 +17,7 @@ public class DocumentService : IDocumentService
     private readonly ILogger<DocumentService> _logger;
     private readonly DocumentServiceOptions _options;
     private readonly ICurrentUser _currentUser;
+    private readonly AiModelSettingsService? _aiModels;
 
     public DocumentService(
         IDocumentRepository documentRepository,
@@ -23,9 +25,11 @@ public class DocumentService : IDocumentService
         IProcessingQueue processingQueue,
         ILogger<DocumentService> logger,
         IOptions<DocumentServiceOptions> options,
-        ICurrentUser currentUser)
+        ICurrentUser currentUser,
+        AiModelSettingsService? aiModels = null)
     {
         _currentUser = currentUser;
+        _aiModels = aiModels;
         _documentRepository = documentRepository;
         _fileStorage = fileStorage;
         _processingQueue = processingQueue;
@@ -53,6 +57,27 @@ public class DocumentService : IDocumentService
         return RequeueResult.Requeued;
     }
 
+    public async Task<ModelSwitchResult> RetryWithModelAsync(Guid id, string? modelType, CancellationToken cancellationToken = default)
+    {
+        var document = await _documentRepository.GetByIdAsync(id, cancellationToken);
+        if (document == null || !_currentUser.CanAccess(document))
+            return ModelSwitchResult.NotFound;
+        if (document.Status != DocumentStatus.Failed)
+            return ModelSwitchResult.NotFailed;
+        if (!AiModelSettingsService.TryParse(modelType, out var parsed))
+            return ModelSwitchResult.InvalidModel;
+        if (_aiModels is null || !_aiModels.IsEnabled(parsed))
+            return ModelSwitchResult.ModelUnavailable;
+
+        document.SelectAiModel(parsed);
+        document.UpdateStatus(DocumentStatus.Queued);
+        await _documentRepository.UpdateAsync(document, cancellationToken);
+        await _processingQueue.EnqueueAsync(document.Id, cancellationToken);
+        await _documentRepository.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Document {DocumentId} re-queued with the {ModelType} model by {UserId}.", document.Id, parsed, _currentUser.UserId);
+        return ModelSwitchResult.Requeued;
+    }
+
     public async Task<UploadDocumentResponse> UploadDocumentAsync(
         Stream fileStream,
         string originalFileName,
@@ -70,6 +95,7 @@ public class DocumentService : IDocumentService
         var contentHash = ComputeContentHash(fileStream);
         fileStream.Position = 0;
 
+        var aiModelType = _aiModels is null ? (AiModelType?)null : await _aiModels.ResolveAsync(_currentUser.UserId, cancellationToken);
         var storageKey = GenerateStorageKey();
 
         string? storedStorageKey = null;
@@ -90,6 +116,8 @@ public class DocumentService : IDocumentService
             contentHash: contentHash,
             storageKey: storedStorageKey,
             ownerId: _currentUser.UserId);
+        if (aiModelType is { } selectedModel)
+            document.SelectAiModel(selectedModel);
 
         try
         {
@@ -252,7 +280,8 @@ public class DocumentService : IDocumentService
             FileSize = document.FileSize,
             Status = document.Status.ToString(),
             CreatedAtUtc = document.CreatedAtUtc,
-            OwnerId = document.OwnerId
+            OwnerId = document.OwnerId,
+            AiModelType = document.AiModelType.ToString()
         };
     }
 }

@@ -37,7 +37,7 @@ public class InvoiceExtractorTests
             });
 
     private InvoiceExtractor CreateExtractor() => new(
-        _repository.Object, _storage.Object, _textExtractor.Object, _ai.Object,
+        _repository.Object, _storage.Object, _textExtractor.Object, TestAiProviders.For(_ai.Object),
         NullLogger<InvoiceExtractor>.Instance,
         new ValidationService(new IInvoiceValidationRule[] { new InconsistentInvoiceAmountsValidationRule() }));
 

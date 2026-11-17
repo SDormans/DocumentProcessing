@@ -36,6 +36,8 @@ Exit criteria: an integration test per item, and a browser smoke test of upload 
 
 ## Milestone 2: real extraction, measured
 
+_On branch `milestone/2-real-extraction` (not merged yet): evaluation runner and nightly workflow, OCR, truncation warning, cost budget. The scored run (2.1/2.4) still needs an API key._
+
 | # | Item | Notes |
 |---|---|---|
 | 2.1 | Run `Ai:Provider=OpenAi` against OpenAI or Azure OpenAI on the 50-invoice synthetic corpus | Publish the scorecard (field accuracy, latency, cost per invoice) in the README. This replaces the "Planned" evaluation row |

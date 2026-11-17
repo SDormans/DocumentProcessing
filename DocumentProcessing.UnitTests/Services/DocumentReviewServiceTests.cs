@@ -41,6 +41,29 @@ public class DocumentReviewServiceTests
         Mock.Of<ICurrentUser>(u => u.HasUnrestrictedDocumentAccess));
 
     [Fact]
+    public async Task Detail_ShowsStoredExtractionWarnings_ButNotStaleValidationCopies()
+    {
+        var truncation = InvoiceExtractor.TruncationWarning(60_000);
+        _results.Setup(r => r.GetByDocumentIdAsync(_document.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new InvoiceExtractionResultEntity
+            {
+                DocumentId = _document.Id,
+                ExtractionVersion = 1,
+                SupplierName = "Acme",
+                WarningsJson = System.Text.Json.JsonSerializer.Serialize(new[] { truncation, "[Error] MISSING_REQUIRED_FIELDS: Required fields are missing." })
+            });
+
+        var detail = await Service.GetDocumentDetailAsync(_document.Id);
+
+        detail!.ValidationResults.Should().ContainSingle().Which.Should().BeEquivalentTo(new
+        {
+            RuleId = "ExtractionWarning",
+            Severity = "Warning",
+            Message = truncation
+        });
+    }
+
+    [Fact]
     public async Task Approve_WithoutPriorCorrections_CreatesReviewFromExtraction()
     {
         var response = await Service.ApproveAsync(_document.Id, new ApproveRequest(), "user-1", "reviewer");

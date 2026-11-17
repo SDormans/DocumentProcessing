@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { DocumentList } from './components/DocumentList';
 import { DocumentDetail } from './components/DocumentDetail';
+import { AiModelSelector } from './components/AiModelSelector';
 
 const App: React.FC = () => {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
@@ -88,6 +89,7 @@ const App: React.FC = () => {
       <main className="app-shell">
         <header className="app-header">
           <h1>Document Processing</h1>
+          <AiModelSelector />
           <button type="button" onClick={signOut}>Sign out</button>
         </header>
         {error && <p className="error" role="alert">{error}</p>}

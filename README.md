@@ -15,7 +15,7 @@ An ASP.NET Core and React platform for invoice PDFs: upload, queued background e
 |---|---|---|
 | Goal | Show an invoice-processing architecture in a hackathon demo | Turn the prototype into a working, measured, tested project |
 | Upload, storage, review UI | Working | Working |
-| AI extraction | Implemented, run by the worker | `InvoiceExtractor` extracts PDF text, calls an OpenAI-compatible Chat Completions endpoint with a strict JSON schema, then runs deterministic validation. Configured with `Ai:*`; `Ai:Provider=Fake` (default) needs no key. Uploads now create a queue command. |
+| AI extraction | Implemented, run by the worker | `InvoiceExtractor` extracts PDF text, calls the chosen AI model with a strict JSON schema, then runs deterministic validation. Configured with `Ai:*`; the default `Fake` provider needs no key. Users choose a cloud (OpenAI, Azure OpenAI, Anthropic) or local (Ollama, llama.cpp) model; see [Cloud or local AI model](#cloud-or-local-ai-model). Uploads now create a queue command. |
 | Evaluation | Harness and 50-invoice synthetic corpus, no model results | Planned: published scorecard with accuracy, latency and cost per invoice |
 | Integration tests | Controller-level, mocked | Real API host and PostgreSQL via Testcontainers: migrations, auth, upload → extraction → review |
 | Background processing | Implemented | `DocumentProcessing.Worker` claims `QueueCommands` with a lease (`FOR UPDATE SKIP LOCKED`), runs extraction and validation, stores the result and moves the document to `NeedsReview`. Retries are bounded with exponential backoff. See [ADR 0001](./docs/adr/0001-database-backed-queue.md). |
@@ -31,6 +31,7 @@ Everything in the right-hand column marked "Planned" is not done yet. This READM
 - File size, extension, supported MIME type (`application/pdf` or generic `application/octet-stream`), and `%PDF-` signature checks.
 - PostgreSQL persistence, EF Core migrations, and local or Azure Blob file storage.
 - A React review interface with correction and approve/reject API calls.
+- A per-user choice between a cloud and a local AI model, saved on the account, with startup validation of the AI settings and a retry-with-the-other-model option for failed documents.
 - A deterministic, synthetic 50-invoice ground-truth corpus and a prediction scoring harness.
 - Testcontainers integration tests against a real PostgreSQL, and a CI workflow that builds, tests and builds all container images.
 - Local Docker Compose configuration for PostgreSQL, API, worker, and web UI.
@@ -63,7 +64,7 @@ Synthetic corpus ──► prediction JSONL ──► evaluation report
 | `DocumentProcessing.IntegrationTests` | Tests against the real API host and a PostgreSQL container (Testcontainers): migrations, auth, upload → extraction → review. |
 | `tools/evaluation` | Synthetic dataset generator and JSONL prediction evaluator. |
 
-The API persists uploaded documents, stages a queue command with each upload, and exposes review endpoints. The worker processes queued documents (see [ADR 0001](./docs/adr/0001-database-backed-queue.md)). `InvoiceExtractor` calls an OpenAI-compatible Chat Completions endpoint selected with `Ai:Provider=OpenAi`; the default `Ai:Provider=Fake` needs no key but returns empty fields. The real provider path has not been exercised against a live endpoint yet, and OCR for scanned PDFs is not wired into the worker image.
+The API persists uploaded documents, stages a queue command with each upload, and exposes review endpoints. The worker processes queued documents (see [ADR 0001](./docs/adr/0001-database-backed-queue.md)). `InvoiceExtractor` asks `IAiProviderRegistry` for the cloud or local model recorded on the document and never depends on a specific vendor ([ADR 0007](./docs/adr/0007-cloud-and-local-models.md)). The default `Fake` provider needs no key but returns empty fields. The real provider paths have not been exercised against a live endpoint yet. Scanned PDFs are read with Tesseract OCR in the worker image.
 
 ## Requirements
 
@@ -108,7 +109,43 @@ The API persists uploaded documents, stages a queue command with each upload, an
 
    To remove the local database and uploaded files as well, explicitly remove the named volumes with `docker compose down --volumes`. This permanently deletes the local demo data.
 
-With the default fake provider, the uploaded document is picked up by the worker and moves to `NeedsReview` with empty extracted fields, because the fake provider does not extract anything. Real extraction needs `Ai:Provider=OpenAi` and a key (not yet run; see the roadmap). The JSONL ground truth is not an extraction result.
+With the default fake provider, the uploaded document is picked up by the worker and moves to `NeedsReview` with empty extracted fields, because the fake provider does not extract anything. Real extraction needs a cloud model with a key or a local model (not yet run against a live endpoint; see the roadmap). The JSONL ground truth is not an extraction result.
+
+## Cloud or local AI model
+
+Each user picks the model for their uploads in the **AI model for new uploads** dropdown in the page header:
+
+- **Cloud:** a hosted API: OpenAI, Azure OpenAI or Anthropic (Claude).
+- **Local:** a runtime on your own machine or network: Ollama, a llama.cpp `llama-server`, or any other OpenAI-compatible server. Invoice text does not leave your infrastructure.
+
+The choice is saved on the user's account, so it survives signing out and applies on every device. Each upload records the model it was made with, and the worker uses that model; changing the dropdown does not affect documents already queued. Models that are not configured are shown as "not configured", and the dropdown warns when the chosen model is unreachable, its API key is rejected, or a local model is not installed.
+
+**Configure** the models in `.env` (Docker) or under `Ai:*` (`appsettings`). The API and the worker need the same settings:
+
+| `.env` variable | Setting | Meaning |
+|---|---|---|
+| `AI_PROVIDER`, `AI_ENDPOINT`, `AI_API_KEY`, `AI_MODEL` | `Ai:Cloud:*` | Cloud model: `Fake` (default), `OpenAI`, `Anthropic` or `None` |
+| `AI_LOCAL_PROVIDER`, `AI_LOCAL_ENDPOINT`, `AI_LOCAL_MODEL` | `Ai:Local:*` | Local model: `None` (default, hidden), `OpenAI` (any OpenAI-compatible server) or `Fake` |
+| `AI_DEFAULT_MODEL_TYPE` | `Ai:DefaultModelType` | `Cloud` (default) or `Local`, for users who have not chosen |
+| `AI_FALLBACK_MODE` | `Ai:Fallback:Mode` | `None` (default) or `Automatic`; see below |
+
+Invalid settings stop the API and worker at startup with one message listing every problem, for example `Invalid AI configuration: Ai:Cloud:ApiKey is required for provider 'OpenAI'.` The older flat `Ai:Provider`/`Ai:ApiKey`/`Ai:ModelName` keys still work and configure the cloud model.
+
+**Try a local model with Ollama:**
+
+```powershell
+docker compose --profile local-llm up -d ollama
+docker compose exec ollama ollama pull llama3.1:8b
+```
+
+Set `AI_LOCAL_PROVIDER=OpenAI`, `AI_LOCAL_ENDPOINT=http://ollama:11434/v1/` and `AI_LOCAL_MODEL=llama3.1:8b` in `.env`, then `docker compose up -d api worker`. Score a local model with the evaluation tooling before relying on it; small models are usually less accurate than hosted ones.
+
+**When the chosen model fails:**
+
+- With `AI_FALLBACK_MODE=None` (default), the document is retried with the same model up to `QueueProcessing:MaxAttempts`. It then shows as `Failed`, with the reason and a button to switch to the other model and retry (`POST /api/documents/{id}/retry-with-model`). No document is sent to another model without the user's action.
+- With `AI_FALLBACK_MODE=Automatic`, the other configured model is tried immediately, and the result carries a warning naming the model that processed it. Only enable this if documents chosen for the local model may be sent to the cloud.
+
+Full reference: [Configuration](docs/wiki/Configuration.md#cloud-and-local-models).
 
 ### Run the API without Docker
 
@@ -177,6 +214,7 @@ The evaluator consumes one prediction JSON object per line. Each record must inc
 - `id`: an ID from the dataset.
 - `success`, `valid`, `requiresHumanReview`: boolean outcomes.
 - `fields`: all nine keys `invoiceNumber`, `supplierName`, `invoiceDate`, `dueDate`, `currency`, `subtotal`, `taxAmount`, `totalAmount`, and `lineItems`. Use `null` for a missing field.
+- Optional `unscoredFields`: field names the model cannot produce; they are left out of the accuracy instead of counting as missing.
 - Optional non-negative telemetry: `durationMs`, `ocrDurationMs`, `inferenceDurationMs`, `queueWaitMs`, `retryCount`, and `aiCostUsd`.
 
 Run the scorecard with:
@@ -253,4 +291,6 @@ GitHub Actions is configured in [`.github/workflows/ci.yml`](./.github/workflows
 - **PDF upload returns 413/415/400:** check the configured upload limit, `.pdf` extension, supported MIME type, and actual PDF signature.
 - **The document remains `Queued`:** check that the `worker` service is running (`docker compose logs worker`). Failed commands record `LastErrorCategory` in `QueueCommands`.
 - **Evaluation accuracy is `null`:** no prediction JSONL was supplied. This is intentional; the tool does not fabricate predictions or metrics.
+- **Document `Failed` because the AI model could not be reached:** the reason is shown on the document page. Check the warning under the model dropdown, start the local runtime or run `ollama pull <model>`, then retry with the same model or switch to the other one.
+- **Startup fails with `Invalid AI configuration`:** the message names every wrong `Ai:*` setting; fix them in `.env` or `appsettings`.
 - **OCR/AI failures:** documents without extractable text, and AI responses that are rejected, refused or violate the schema, fail without a retry. Timeouts and HTTP errors are retried up to `QueueProcessing:MaxAttempts`.

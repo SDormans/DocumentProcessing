@@ -19,6 +19,9 @@ public interface IDocumentService
     /// </summary>
     Task<RequeueResult> RequeueAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>Re-queues a failed document the current user can access, to be processed with <paramref name="modelType"/>.</summary>
+    Task<ModelSwitchResult> RetryWithModelAsync(Guid id, string? modelType, CancellationToken cancellationToken = default);
+
     Task<DocumentFileDto?> GetDocumentFileAsync(Guid id, CancellationToken cancellationToken = default);
 }
 
@@ -27,4 +30,13 @@ public enum RequeueResult
     Requeued,
     NotFound,
     NotFailed
+}
+
+public enum ModelSwitchResult
+{
+    Requeued,
+    NotFound,
+    NotFailed,
+    InvalidModel,
+    ModelUnavailable
 }

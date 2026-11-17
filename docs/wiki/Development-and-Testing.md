@@ -64,4 +64,4 @@ Vite proxies `/api` and `/health` to `API_BASE_URL`, which defaults to `http://l
 
 ## Adding an AI provider
 
-Implement `IAiProvider` in `DocumentProcessing.Infrastructure/Ai`, add a branch in `AiServiceCollectionExtensions` keyed on `Ai:Provider`, and emit the same `ai.*` metrics.
+Implement `IAiProvider` in `DocumentProcessing.Infrastructure/Ai`, add its name to the provider validation in `ValidatedAiSettings` and a case in `AiServiceCollectionExtensions.AddAiProvider` (one keyed registration per model type), and emit the same `ai.*` metrics. `InvoiceExtractor` and the worker need no changes ([ADR 0007](../adr/0007-cloud-and-local-models.md)).
