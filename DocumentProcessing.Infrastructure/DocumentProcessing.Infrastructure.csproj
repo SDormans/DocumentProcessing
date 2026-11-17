@@ -21,7 +21,7 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.21.0" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.21.0" />
     <PackageReference Include="PDFsharp-MigraDoc" Version="6.0.0" />
-    <PackageReference Include="SkiaSharp" Version="3.116.0" />
+    <PackageReference Include="SkiaSharp" Version="4.156.1" />
     <PackageReference Include="Tesseract" Version="5.2.0" />
     <PackageReference Include="PdfPig" Version="0.1.16" />
     <ProjectReference Include="..\DocumentProcessing.Domain\DocumentProcessing.Domain.csproj" />
