@@ -26,6 +26,7 @@ Standard ASP.NET Core configuration: `appsettings*.json`, then environment varia
 | `DocumentAccess:UnrestrictedRoles` | `["Admin"]` | Roles that see all documents. The configured list **replaces** the default |
 | `RateLimiting:Login:PermitLimit` / `Period` | `5` / `00:01:00` | Per client IP |
 | `RateLimiting:Upload:PermitLimit` / `Period` | `20` / `00:01:00` | Per signed-in user |
+| `DataProtection:BlobUri` | (empty) | Blob URL for the cookie-signing keys, e.g. `https://<account>.blob.core.windows.net/dataprotection/keys.xml`. Uses the `FileStorage:AzureBlob:ManagedIdentityClientId` identity. Empty keeps keys in the container (lost on restart) |
 | `ASPNETCORE_FORWARDEDHEADERS_ENABLED` | `false` | Set `true` behind a TLS-terminating proxy (Azure), or secure cookies can't be issued |
 
 ## Worker

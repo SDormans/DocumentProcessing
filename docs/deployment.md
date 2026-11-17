@@ -17,7 +17,34 @@ The deploy job is **skipped** while the repository variable `AZURE_RESOURCE_GROU
 
 Plus Azure Database for PostgreSQL (flexible server), a storage account with a `documents` blob container, and a user-assigned managed identity used by the API and worker for blob access.
 
-## One-time setup
+## Infrastructure as code (Bicep)
+
+`infra/main.bicep` creates the whole environment: Log Analytics, a user-assigned identity, a ZRS storage account (`documents` and `dataprotection` containers, 14-day blob soft delete, a lifecycle rule deleting blobs after 2,600 days as a backstop for the app's retention purge), PostgreSQL Flexible Server 16 with 35-day point-in-time backups, the Container Apps environment and the three apps (the worker has a ClamAV sidecar), plus email alerts on worker failures and API errors when `alertEmail` is set. App names match the defaults `cd.yml` updates.
+
+The API keeps its Data Protection keys (which sign the sign-in and anti-forgery cookies) in the `dataprotection` container via `DataProtection:BlobUri`, so restarts and deploys no longer sign everyone out.
+
+```bash
+bicep build infra/main.bicep                       # syntax/type check, no Azure needed
+az deployment group what-if -g $RG -f infra/main.bicep -p infra/main.parameters.json \
+  -p postgresAdminPassword=... appDbPassword=... bootstrapAdminPassword=... aiApiKey=...
+az deployment group create  -g $RG -f infra/main.bicep -p infra/main.parameters.json -p ...   # the actual deploy
+```
+
+Before the first app start, connect as the admin login and create `appDbUser` with ownership of the `documentprocessing` database (the API runs migrations with it). `MalwareScanning__*` and `Authentication__RequireAdminMfa` take effect once the security milestone is merged.
+
+### Rollback drill
+
+1. `az containerapp revision list -g $RG -n documentprocessing-api -o table` and note the previous healthy revision.
+2. Re-run `cd.yml` manually for the previous commit, or `az containerapp update -n <app> --image <registry>/<image>:sha-<previous>` for api, worker and web.
+3. Check `/health/ready` through the web app. Migrations are forward-only: roll back code only to a commit whose migrations are already applied, or restore the database (below).
+
+### Backup and restore drill
+
+- Database: point-in-time restore to a new server, then point the `db` secret at it: `az postgres flexible-server restore -g $RG --source-server <server> -n <server>-restore --restore-time <UTC time>`.
+- Blobs: undelete within 14 days from the portal or `az storage blob undelete`. Deleting a document (retention purge or admin erasure) also deletes its blob; soft delete keeps it recoverable for 14 days, so erasure is complete after that window. Database backups keep deleted rows for up to 35 days.
+- Run the drill once per quarter and record the restore time.
+
+## One-time setup (manual alternative)
 
 Replace the `<…>` placeholders. Secrets are passed as Container Apps secrets, never as plain environment variables.
 

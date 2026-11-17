@@ -21,7 +21,8 @@ builder.Services
     .AddApiRateLimiting(builder.Configuration)
     .AddApiAntiforgery(builder.Environment)
     .AddCookieAuthentication(builder.Environment)
-    .AddAuthorizationPolicies();
+    .AddAuthorizationPolicies()
+    .AddPersistentDataProtection(builder.Configuration);
 
 builder.Services.AddControllers(options => options.Filters.Add<ValidateAntiforgeryOnUnsafeMethodsFilter>());
 builder.Services.AddEndpointsApiExplorer();

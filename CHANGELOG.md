@@ -5,6 +5,11 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 ### Added
+- `infra/main.bicep`: Azure Container Apps environment, PostgreSQL with 35-day backups, storage with soft delete and lifecycle backstop, managed identity, ClamAV sidecar and email alerts. Validated with `bicep build`; not deployed.
+- Data Protection keys persist to blob storage when `DataProtection:BlobUri` is set, so deploys don't sign users out.
+- Deployment docs: Bicep usage, rollback drill, backup and restore drill.
+
+### Added
 - ASP.NET Core Identity user store backed by PostgreSQL, replacing the in-memory `DevelopmentUserService`; the API can now start outside Development.
 - README: project origin note and project history section (hackathon version vs portfolio version).
 - This changelog.
