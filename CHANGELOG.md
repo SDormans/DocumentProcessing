@@ -5,6 +5,7 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 ### Added
+- Real-model evaluation: `npm run evaluate:predict` runs the production prompt, AI provider and validation over the corpus (`tools/DocumentProcessing.Evaluation`), `npm run evaluate:report` scores it. `.github/workflows/evaluation.yml` does both nightly and on demand when the `AI_API_KEY` secret is set.
 - OCR for scanned PDFs: pages without a text layer are rendered with `pdftoppm` and read with the `tesseract` CLI (English + Dutch), installed in the worker image. Digital PDFs skip OCR. Settings under `Ocr:*`.
 - Documents whose text exceeds the 48,000-character prompt limit get a warning saying the text was truncated.
 - `Ai:MaxCostPerDocument`: per-document AI cost budget. When the first pass reaches it, the correction pass is skipped; overruns add a warning. `EstimatedCost` is now carried on the extraction result.

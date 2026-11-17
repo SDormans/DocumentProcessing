@@ -6,7 +6,9 @@
     "dataset:generate": "node tools/evaluation/generate-dataset.mjs --run",
     "dataset:pdfs": "node tools/evaluation/generate-dataset.mjs --run --pdf-dir evaluation-data/generated/pdfs",
     "evaluate": "node tools/evaluation/evaluate.mjs",
-    "test": "node --test tools/evaluation/*.test.mjs"
+    "test": "node --test tools/evaluation/*.test.mjs",
+    "evaluate:predict": "dotnet run --project tools/DocumentProcessing.Evaluation --configuration Release --",
+    "evaluate:report": "node tools/evaluation/evaluate.mjs --predictions evaluation-data/generated/predictions.jsonl --report evaluation-data/generated/report.json"
   },
   "repository": {
     "type": "git",

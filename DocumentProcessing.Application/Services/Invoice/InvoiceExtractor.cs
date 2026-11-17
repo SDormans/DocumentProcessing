@@ -184,7 +184,7 @@ public class InvoiceExtractor : IInvoiceExtractor
         _validationService.GetAllResults().Where(r =>
             r.Status == "Failing" || r.Severity is "Error" or "Critical");
 
-    internal static string BuildPrompt(string documentText)
+    public static string BuildPrompt(string documentText)
     {
         var sb = new StringBuilder();
         sb.AppendLine("Extract the invoice fields from the document text below.");

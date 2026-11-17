@@ -1,0 +1,81 @@
+name: Model evaluation
+
+# Scores a real model on the 50-invoice synthetic corpus. Runs nightly and on demand, and only
+# when the AI_API_KEY secret is set. Configure the model with repository variables:
+# AI_ENDPOINT, AI_MODEL, AI_API_KEY_HEADER (api-key for Azure OpenAI), AI_INPUT_COST_PER_MILLION, AI_OUTPUT_COST_PER_MILLION.
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: Number of invoices to score (empty = all 50)
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: model-evaluation
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AI_API_KEY: ${{ secrets.AI_API_KEY }}
+    steps:
+      - name: Check for API key
+        id: gate
+        run: |
+          if [ -z "$AI_API_KEY" ]; then
+            echo "::notice::AI_API_KEY secret is not set; skipping model evaluation."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
+
+      - uses: actions/setup-dotnet@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          node-version: 24
+
+      - name: Extract the corpus with the configured model
+        if: steps.gate.outputs.run == 'true'
+        env:
+          Ai__Provider: OpenAI
+          Ai__ApiKey: ${{ secrets.AI_API_KEY }}
+          Ai__Endpoint: ${{ vars.AI_ENDPOINT || 'https://api.openai.com/v1/' }}
+          Ai__ModelName: ${{ vars.AI_MODEL || 'gpt-4o-mini' }}
+          Ai__ApiKeyHeader: ${{ vars.AI_API_KEY_HEADER || 'Authorization' }}
+          Ai__InputCostPerMillionTokens: ${{ vars.AI_INPUT_COST_PER_MILLION || '0' }}
+          Ai__OutputCostPerMillionTokens: ${{ vars.AI_OUTPUT_COST_PER_MILLION || '0' }}
+          LIMIT: ${{ inputs.limit }}
+        run: npm run evaluate:predict -- ${LIMIT:+--limit "$LIMIT"}
+
+      - name: Score predictions
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          npm run evaluate:report
+          {
+            echo "## Model evaluation (${{ vars.AI_MODEL || 'gpt-4o-mini' }})"
+            echo '```json'
+            cat evaluation-data/generated/report.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.gate.outputs.run == 'true' && always()
+        with:
+          name: model-evaluation
+          path: evaluation-data/generated/
+          if-no-files-found: ignore
