@@ -168,7 +168,7 @@ public class InvoiceExtractor : IInvoiceExtractor
         {
             result.Warnings.AddRange(_validationService.GetAllResults()
                 .Where(v => v.Status != "Passing" && v.Severity != "Info")
-                .Select(v => $"[{v.Severity}] {v.RuleId}: {v.Message}"));
+                .Select(FormatValidationWarning));
         }
 
         _logger.LogInformation(
@@ -243,6 +243,12 @@ public class InvoiceExtractor : IInvoiceExtractor
     private IEnumerable<ValidationResult> GetFailingChecks() =>
         _validationService.GetAllResults().Where(r =>
             r.Status == "Failing" || r.Severity is "Error" or "Critical");
+
+    private static string FormatValidationWarning(ValidationResult v) => $"[{v.Severity}] {v.RuleId}: {v.Message}";
+
+    /// <summary>Whether a stored warning is a copy of a validation finding added by this extractor.</summary>
+    public static bool IsValidationWarning(string warning) =>
+        System.Text.RegularExpressions.Regex.IsMatch(warning, @"^\[(Info|Warning|Error|Critical)\] [^\s:]+: ");
 
     public static string BuildPrompt(string documentText)
     {
