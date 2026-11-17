@@ -5,12 +5,12 @@ namespace DocumentProcessing.Application.Services;
 public interface IDocumentReviewService
 {
     /// <summary>
-    /// Haalt de review-detail voor een document op (inclusief velden, validaties en status).
+    /// Returns the review detail of a document (fields, validation results and status).
     /// </summary>
     Task<DocumentDetailDto?> GetDocumentDetailAsync(Guid documentId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Slaat menselijke correcties op. Originele AI-output wordt niet overschreven.
+    /// Saves human corrections. The original AI output is not overwritten.
     /// Vereist de rol Reviewer of hoger.
     /// </summary>
     Task<ReviewActionResponse> SubmitCorrectionsAsync(
@@ -21,8 +21,8 @@ public interface IDocumentReviewService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Keurt een document goed. Alleen toegestaan als de bedrijfsregels dit toelaten
-    /// (bijv. geen kritieke validatiefouten) en de gebruiker bevoegd is.
+    /// Approves a document. Only allowed when the business rules allow it
+    /// (no validation errors) and the user is authorized.
     /// </summary>
     Task<ReviewActionResponse> ApproveAsync(
         Guid documentId,
@@ -32,7 +32,7 @@ public interface IDocumentReviewService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Wijst een document af. Vereist een reden en een bevoegde gebruiker.
+    /// Rejects a document. Requires a reason and an authorized user.
     /// </summary>
     Task<ReviewActionResponse> RejectAsync(
         Guid documentId,
@@ -42,19 +42,19 @@ public interface IDocumentReviewService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Haalt de auditlog voor een documentreview op; null als het document niet bestaat of niet toegankelijk is.
+    /// Returns the audit log of a document review; null when the document does not exist or is not accessible.
     /// </summary>
     Task<IReadOnlyList<ReviewAuditEntryDto>?> GetAuditLogAsync(
         Guid documentId,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Bepaalt of de ingelogde gebruiker een document mag beoordelen/corrigeren.
+    /// Whether the signed-in user may review and correct documents.
     /// </summary>
     Task<bool> CanReviewAsync(string userId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Bepaalt of de ingelogde gebruiker een document mag goedkeuren of afwijzen.
+    /// Whether the signed-in user may approve or reject documents.
     /// </summary>
     Task<bool> CanApproveOrRejectAsync(string userId, CancellationToken cancellationToken = default);
 }

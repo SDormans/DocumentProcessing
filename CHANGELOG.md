@@ -4,6 +4,9 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Changed
+- All API messages, validation messages, extraction warnings and code comments are now English (the UI already was).
+
 ### Added
 - ASP.NET Core Identity user store backed by PostgreSQL, replacing the in-memory `DevelopmentUserService`; the API can now start outside Development.
 - README: project origin note and project history section (hackathon version vs portfolio version).

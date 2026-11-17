@@ -23,7 +23,7 @@ public class InconsistentInvoiceAmountsValidationRule : IInvoiceValidationRule
     public string RuleId => "INCONSISTENT_AMOUNTS";
 
     /// <summary>
-    /// Voert de validatie uit op het extractieresultaat.
+    /// Validates the extraction result.
     /// </summary>
     public IEnumerable<ValidationResult> Validate(InvoiceExtractionResult result)
     {
@@ -59,9 +59,9 @@ public class InconsistentInvoiceAmountsValidationRule : IInvoiceValidationRule
                 Status = ValidationStatus.Failing.ToString(),
                 Severity = ValidationSeverity.Warning.ToString(),
                 Message = isTotalHigher
-                    ? $"Factuurbedrag ({total}) ligt {difference:C} boven de verwachte som van Subtotal ({subtotal}) + Tax ({tax}) = {calculatedTotal:C}."
-                    : $"Factuurbedrag ({total}) ligt {difference:C} onder de verwachte som van Subtotal ({subtotal}) + Tax ({tax}) = {calculatedTotal:C}. " +
-                      $"Dit kan wijzen op foutieve BTW-toepassing of afronding.",
+                    ? $"Total ({total}) is {difference:C} above the expected Subtotal ({subtotal}) + Tax ({tax}) = {calculatedTotal:C}."
+                    : $"Total ({total}) is {difference:C} below the expected Subtotal ({subtotal}) + Tax ({tax}) = {calculatedTotal:C}. " +
+                      $"This may point to wrongly applied VAT or rounding.",
                 AffectedFields = "Subtotal, TaxAmount, TotalAmount",
                 ExtraData = new
                 {
@@ -89,7 +89,7 @@ public class InconsistentInvoiceAmountsValidationRule : IInvoiceValidationRule
                     RuleId = RuleId,
                     Status = ValidationStatus.Warning.ToString(),
                     Severity = ValidationSeverity.Warning.ToString(),
-                    Message = $"Mogelijke afrondingverschillen: Subtotal extra herrekend als {recoveredSubtotal:C} (origineel: {subtotal:C}), verschil: {subtotalDifference:C}.",
+                    Message = $"Possible rounding difference: subtotal recalculated as {recoveredSubtotal:C} (original: {subtotal:C}), difference: {subtotalDifference:C}.",
                     AffectedFields = "Subtotal, TaxAmount, TotalAmount",
                     ExtraData = new
                     {

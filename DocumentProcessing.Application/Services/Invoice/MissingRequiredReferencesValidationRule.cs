@@ -1,7 +1,7 @@
 using DocumentProcessing.Application.Services.Invoice;
 
 /// <summary>
-/// Valideert of benodigde referenties/identificatoren aanwezig zijn.
+/// Checks that required references are present.
 /// Denkt aan: order numbers, klantreferenties, aankooporder nummers, etc.
 /// </summary>
 public class MissingRequiredReferencesValidationRule : IInvoiceValidationRule
@@ -9,7 +9,7 @@ public class MissingRequiredReferencesValidationRule : IInvoiceValidationRule
     private readonly IEnumerable<string> _requiredReferenceFields;
 
     /// <summary>
-    /// Initialiseert een nieuwe instantie van de <see cref="MissingRequiredReferencesValidationRule"/> klasse.
+    /// Creates the rule.
     /// </summary>
     /// <param name="requiredReferenceFields">Lijst met velden die referenties bevatten, bijv. ["OrderNumber", "PurchaseOrderNumber"].</param>
     public MissingRequiredReferencesValidationRule(IEnumerable<string> requiredReferenceFields)
@@ -23,7 +23,7 @@ public class MissingRequiredReferencesValidationRule : IInvoiceValidationRule
     public string RuleId => "MISSING_REQUIRED_REFERENCES";
 
     /// <summary>
-    /// Voert de validatie uit op het extractieresultaat.
+    /// Validates the extraction result.
     /// </summary>
     public IEnumerable<ValidationResult> Validate(InvoiceExtractionResult result)
     {
@@ -31,7 +31,7 @@ public class MissingRequiredReferencesValidationRule : IInvoiceValidationRule
 
         foreach (var field in _requiredReferenceFields)
         {
-            // Elk veld in de Lines verzameling of specifieke eigenschappen worden gechecked
+            // Each field is checked against the lines and specific properties.
             bool hasReference = result.Lines != null && result.Lines.Any(line =>
             {
                 if (string.IsNullOrWhiteSpace(line)) return false;
@@ -41,14 +41,14 @@ public class MissingRequiredReferencesValidationRule : IInvoiceValidationRule
 
             if (!hasReference)
             {
-                // Check of het veld direct op het resultaat bestaat (indien van toepassing)
+                // Check whether the field exists directly on the result.
                 // Hier kijken we of de regel overal in de lijst voorkomt
                 failures.Add(new ValidationResult
                 {
                     RuleId = RuleId,
                     Status = ValidationStatus.Warning.ToString(),
                     Severity = ValidationSeverity.Warning.ToString(),
-                    Message = $"Referentieveld '{field}' komt niet voor in de factuurregels. Controleer of de referentie correct is geëxtraheerd.",
+                    Message = $"Reference field '{field}' does not appear in the invoice lines. Check that the reference was extracted correctly.",
                     AffectedFields = field,
                     ExtraData = new { FoundInLines = hasReference, LineCount = result.Lines?.Count ?? 0 }
                 });

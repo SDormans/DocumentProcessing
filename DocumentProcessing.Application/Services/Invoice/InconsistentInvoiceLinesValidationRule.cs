@@ -11,7 +11,7 @@ public class InconsistentInvoiceLinesValidationRule : IInvoiceValidationRule
     public string RuleId => "INCONSISTENT_LINES";
 
     /// <summary>
-    /// Voert de validatie uit op het extractieresultaat.
+    /// Validates the extraction result.
     /// </summary>
     public IEnumerable<ValidationResult> Validate(InvoiceExtractionResult result)
     {
@@ -37,7 +37,7 @@ public class InconsistentInvoiceLinesValidationRule : IInvoiceValidationRule
                     RuleId = RuleId,
                     Status = ValidationStatus.Warning.ToString(),
                     Severity = ValidationSeverity.Warning.ToString(),
-                    Message = $"Factuurregel {i + 1} is leeg of bevat alleen spaties.",
+                    Message = $"Invoice line {i + 1} is empty or only whitespace.",
                     AffectedFields = $"Lines[{i}]",
                     ExtraData = new { LineIndex = i, LineContent = line }
                 });
@@ -54,7 +54,7 @@ public class InconsistentInvoiceLinesValidationRule : IInvoiceValidationRule
                     RuleId = RuleId,
                     Status = ValidationStatus.Warning.ToString(),
                     Severity = ValidationSeverity.Warning.ToString(),
-                    Message = $"Factuurregel {i + 1} is erg lang ({line.Length} tekens) en kan Problemen bevatten.",
+                    Message = $"Invoice line {i + 1} is very long ({line.Length} characters) and may contain errors.",
                     AffectedFields = $"Lines[{i}]",
                     ExtraData = new { LineIndex = i, LineLength = line.Length }
                 });
@@ -74,7 +74,7 @@ public class InconsistentInvoiceLinesValidationRule : IInvoiceValidationRule
                     RuleId = RuleId,
                     Status = ValidationStatus.Warning.ToString(),
                     Severity = ValidationSeverity.Warning.ToString(),
-                    Message = $"Er zijn {result.Lines.Count} regels gevonden. Dit is een groot aantal en moet worden nagekeken.",
+                    Message = $"{result.Lines.Count} lines were found. That is unusually many; check them.",
                     AffectedFields = "Lines",
                     ExtraData = new { LineCount = result.Lines.Count }
                 });

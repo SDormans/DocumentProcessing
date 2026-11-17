@@ -1,7 +1,7 @@
 using DocumentProcessing.Application.Services.Invoice;
 
 /// <summary>
-/// Valideert of datums geldige datums zijn en voldoen aan verwachte formaten/bereiken.
+/// Checks that dates are valid and within expected ranges.
 /// </summary>
 public class InvalidDateValidationRule : IInvoiceValidationRule
 {
@@ -11,17 +11,17 @@ public class InvalidDateValidationRule : IInvoiceValidationRule
     public string RuleId => "INVALID_DATE";
 
     /// <summary>
-    /// Voert de validatie uit op het extractieresultaat.
+    /// Validates the extraction result.
     /// </summary>
     public IEnumerable<ValidationResult> Validate(InvoiceExtractionResult result)
     {
         var failures = new List<ValidationResult>();
 
-        // Valideer factuurdatum
+        // Invoice date
         if (result.InvoiceDateHasValue && result.InvoiceDate.HasValue)
         {
             var date = result.InvoiceDate.Value;
-            // Voorbeeldcontrole: factuurdatum mag geen toekomstige datum zijn (algemene bedrijfsregel)
+            // The invoice date cannot be in the future (general business rule).
             // Deze controle kan worden uitgezet via configuratie
             if (date > DateTime.Today.AddYears(1))
             {
@@ -30,13 +30,13 @@ public class InvalidDateValidationRule : IInvoiceValidationRule
                     RuleId = RuleId,
                     Status = ValidationStatus.Warning.ToString(),
                     Severity = ValidationSeverity.Warning.ToString(),
-                    Message = $"Factuurdatum {date:d} is een toekomstige datum en kan verdacht zijn.",
+                    Message = $"Invoice date {date:d} is in the future and may be suspicious.",
                     AffectedFields = "InvoiceDate",
                     ExtraData = new { DateValue = date }
                 });
             }
 
-            // Valideer dat de datum niet te oud is (bijv. voor 1900)
+            // The date cannot be implausibly old (e.g. before 1900).
             if (date < new DateTime(1900, 1, 1))
             {
                 failures.Add(new ValidationResult
@@ -44,7 +44,7 @@ public class InvalidDateValidationRule : IInvoiceValidationRule
                     RuleId = RuleId,
                     Status = ValidationStatus.Failing.ToString(),
                     Severity = ValidationSeverity.Error.ToString(),
-                    Message = $"Factuurdatum {date:d} lijkt onrealistisch oud te zijn.",
+                    Message = $"Invoice date {date:d} looks implausibly old.",
                     AffectedFields = "InvoiceDate",
                     ExtraData = new { DateValue = date }
                 });
@@ -66,7 +66,7 @@ public class InvalidDateValidationRule : IInvoiceValidationRule
                         RuleId = RuleId,
                         Status = ValidationStatus.Failing.ToString(),
                         Severity = ValidationSeverity.Error.ToString(),
-                        Message = $"Vervaldatum {dueDate:d} ligt voor de factuurdatum {result.InvoiceDate.Value:d}.",
+                        Message = $"Due date {dueDate:d} is before the invoice date {result.InvoiceDate.Value:d}.",
                         AffectedFields = "DueDate, InvoiceDate",
                         ExtraData = new { InvoiceDate = result.InvoiceDate.Value, DueDate = dueDate }
                     });
@@ -81,7 +81,7 @@ public class InvalidDateValidationRule : IInvoiceValidationRule
                     RuleId = RuleId,
                     Status = ValidationStatus.Warning.ToString(),
                     Severity = ValidationSeverity.Warning.ToString(),
-                    Message = $"Vervaldatum {dueDate:d} is een toekomstige datum.",
+                    Message = $"Due date {dueDate:d} is in the future.",
                     AffectedFields = "DueDate",
                     ExtraData = new { DueDateValue = dueDate }
                 });

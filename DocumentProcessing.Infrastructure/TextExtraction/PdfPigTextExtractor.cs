@@ -49,7 +49,7 @@ public class PdfPigTextExtractor : IDocumentTextExtractor
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to extract text from page {PageNumber}", pageNumber);
-                warnings.Add($"Pagina {pageNumber}: tekstextractie mislukt ({ex.Message})");
+                warnings.Add($"Page {pageNumber}: text extraction failed ({ex.Message})");
                 pages.Add(new ExtractedPage
                 {
                     PageNumber = pageNumber,
@@ -64,7 +64,7 @@ public class PdfPigTextExtractor : IDocumentTextExtractor
 
         if (!hasAnyText)
         {
-            warnings.Add("Geen leesbare tekst gevonden in PDF. Overweeg OCR voor gescande documenten.");
+            warnings.Add("No readable text found in the PDF. Scanned documents need OCR.");
         }
 
         var result = new TextExtractionResult

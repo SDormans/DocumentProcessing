@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace DocumentProcessing.Application.DTOs;
 
 /// <summary>
-/// Samenvatting van een document voor de overzichtspagina, inclusief review-status.
+/// Document summary for the list page, including review status.
 /// </summary>
 public class DocumentListItemDto
 {
@@ -31,7 +31,7 @@ public class DocumentListItemDto
     public string ReviewStatus { get; set; } = string.Empty;
 
     /// <summary>
-    /// Naam van de gebruiker die de review heeft uitgevoerd (indien van toepassing).
+    /// Name of the user who reviewed the document, if any.
     /// </summary>
     public string? ReviewedBy { get; set; }
 
@@ -39,7 +39,7 @@ public class DocumentListItemDto
 }
 
 /// <summary>
-/// Een individueel geëxtraheerd factuurveld met optionele bronlocatie.
+/// One extracted invoice field with its optional source location.
 /// </summary>
 public class ExtractedFieldDto
 {
@@ -57,18 +57,18 @@ public class ExtractedFieldDto
     public string? EffectiveValue => ApprovedValue ?? CorrectedValue ?? Value;
 
     /// <summary>
-    /// Pagina in het PDF-document waar de waarde vandaan komt (indien beschikbaar).
+    /// PDF page the value came from, if known.
     /// </summary>
     public int? SourcePage { get; set; }
 
     /// <summary>
-    /// Passage/tekst uit de bron rondom de waarde (indien beschikbaar).
+    /// Source text around the value, if known.
     /// </summary>
     public string? SourcePassage { get; set; }
 }
 
 /// <summary>
-/// Detail van één validatieresultaat voor de frontend.
+/// One validation result for the frontend.
 /// </summary>
 public class ValidationResultDto
 {
@@ -110,7 +110,7 @@ public class DocumentDetailDto
     public string? RejectionReason { get; set; }
 
     /// <summary>
-    /// Geautoriseerde URL om het originele PDF-document op te vragen.
+    /// Authorized URL of the original PDF.
     /// </summary>
     public string ContentUrl { get; set; } = string.Empty;
 
@@ -130,7 +130,7 @@ public class SubmitCorrectionsRequest
 }
 
 /// <summary>
-/// Verzoek om een document goed te keuren.
+/// Request to approve a document.
 /// </summary>
 public class ApproveRequest
 {
@@ -138,7 +138,7 @@ public class ApproveRequest
 }
 
 /// <summary>
-/// Verzoek om een document af te wijzen.
+/// Request to reject a document.
 /// </summary>
 public class RejectRequest
 {
@@ -146,7 +146,7 @@ public class RejectRequest
 }
 
 /// <summary>
-/// Antwoord op een reviewactie met bijgewerkte status.
+/// Response to a review action, with the updated status.
 /// </summary>
 public class ReviewActionResponse
 {
@@ -180,7 +180,7 @@ public enum ReviewActionError
 }
 
 /// <summary>
-/// Één auditlog-rij voor de frontend.
+/// One audit log row for the frontend.
 /// </summary>
 public class ReviewAuditEntryDto
 {
@@ -195,7 +195,7 @@ public class ReviewAuditEntryDto
 }
 
 /// <summary>
-/// Gebruikersinformatie voor de auth-context.
+/// The signed-in user, for the auth context.
 /// </summary>
 public class UserInfoDto
 {

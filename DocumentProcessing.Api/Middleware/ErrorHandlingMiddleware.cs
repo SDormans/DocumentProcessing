@@ -35,7 +35,7 @@ public class ErrorHandlingMiddleware
         var response = new ErrorResponse
         {
             TraceId = context.TraceIdentifier,
-            Message = "Er is een fout opgetreden bij het verwerken van de verzoek."
+            Message = "An error occurred while processing the request."
         };
 
         HttpStatusCode statusCode;
@@ -57,7 +57,7 @@ public class ErrorHandlingMiddleware
                 else if (errorList.Any(e => e.Contains("PDF", StringComparison.OrdinalIgnoreCase)))
                 {
                     statusCode = HttpStatusCode.UnsupportedMediaType; // 415
-                    response.Message = "Niet-ondersteund bestandstype.";
+                    response.Message = "Unsupported file type.";
                 }
                 break;
             }

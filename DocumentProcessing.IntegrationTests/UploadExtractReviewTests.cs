@@ -89,7 +89,7 @@ public class UploadExtractReviewTests(PostgresFixture postgres) : IAsyncLifetime
         (await bob.Http.GetAsync($"/api/documents/{id}/review")).StatusCode.Should().Be(HttpStatusCode.NotFound);
         var approve = await bob.SendAsync(HttpMethod.Post, $"/api/documents/{id}/review/approve", JsonContent.Create(new { comment = "x" }));
         approve.StatusCode.Should().Be(HttpStatusCode.NotFound);
-        (await approve.Content.ReadAsStringAsync()).Should().Contain("Document niet gevonden");
+        (await approve.Content.ReadAsStringAsync()).Should().Contain("Document not found");
         (await bob.SendAsync(HttpMethod.Post, $"/api/documents/{id}/review/reject", JsonContent.Create(new { reason = "x" })))
             .StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await bob.SendAsync(HttpMethod.Put, $"/api/documents/{id}/review/corrections", CorrectionsContent(("SupplierName", "x"))))

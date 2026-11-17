@@ -34,7 +34,7 @@ public class OcrPdfTextExtractor : IDocumentTextExtractor
                 ExtractionVersion = 1,
                 Method = TextExtractionMethod.Failed,
                 Pages = new List<ExtractedPage>(),
-                Warnings = new List<string> { "OCR-provider is niet beschikbaar." },
+                Warnings = new List<string> { "The OCR provider is not available." },
                 Quality = new TextExtractionQuality { AverageConfidence = 0, PagesWithLowConfidence = 0 }
             };
         }
@@ -70,7 +70,7 @@ public class OcrPdfTextExtractor : IDocumentTextExtractor
 
                     if (string.IsNullOrWhiteSpace(ocrText))
                     {
-                        warnings.Add($"Pagina {pageNumber}: OCR leverde geen tekst op.");
+                        warnings.Add($"Page {pageNumber}: OCR found no text.");
                         pagesWithLowConfidence++;
                     }
                 }
@@ -88,7 +88,7 @@ public class OcrPdfTextExtractor : IDocumentTextExtractor
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "OCR extraction failed for page {PageNumber}", pageNumber);
-                warnings.Add($"Pagina {pageNumber}: OCR mislukt ({ex.Message})");
+                warnings.Add($"Page {pageNumber}: OCR failed ({ex.Message})");
                 pages.Add(new ExtractedPage
                 {
                     PageNumber = pageNumber,
@@ -105,7 +105,7 @@ public class OcrPdfTextExtractor : IDocumentTextExtractor
 
         if (!hasAnyText)
         {
-            warnings.Add("OCR leverde voor geen enkele pagina tekst op.");
+            warnings.Add("OCR found no text on any page.");
         }
 
         var result = new TextExtractionResult

@@ -3,7 +3,7 @@ using DocumentProcessing.Domain.Entities;
 namespace DocumentProcessing.Application.Services.Invoice;
 
 /// <summary>
-/// Resultaat van factuurgegevensextractie - EF Core entity voor database persistentie.
+/// Invoice extraction result as persisted by EF Core.
 /// </summary>
 public class InvoiceExtractionResultEntity
 {
