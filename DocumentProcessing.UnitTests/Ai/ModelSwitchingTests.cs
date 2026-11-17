@@ -250,6 +250,24 @@ public class RetryWithModelTests
         new AiModelSettingsService(providers ?? TestAiProviders.For(Mock.Of<IAiProvider>()).With(AiModelType.Local, Mock.Of<IAiProvider>()), _preferences.Object));
 
     [Fact]
+    public async Task Upload_does_not_store_the_file_when_the_model_choice_cannot_be_read()
+    {
+        var storage = new Mock<IFileStorage>();
+        _preferences.Setup(p => p.GetAsync("owner", It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("db down"));
+        var service = new DocumentService(
+            _repository.Object, storage.Object, _queue.Object, NullLogger<DocumentService>.Instance,
+            Microsoft.Extensions.Options.Options.Create(new DocumentServiceOptions { MaxFileSizeBytes = 1024 }),
+            new Services.TestCurrentUser("owner", unrestricted: false),
+            new AiModelSettingsService(TestAiProviders.For(Mock.Of<IAiProvider>()), _preferences.Object));
+        using var stream = new MemoryStream("%PDF-1.4 test"u8.ToArray());
+
+        var act = () => service.UploadDocumentAsync(stream, "invoice.pdf", "application/pdf");
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        storage.Verify(s => s.StoreAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Requeues_a_failed_document_with_the_other_model()
     {
         _document.SelectAiModel(AiModelType.Local);

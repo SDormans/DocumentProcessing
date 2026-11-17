@@ -95,6 +95,7 @@ public class DocumentService : IDocumentService
         var contentHash = ComputeContentHash(fileStream);
         fileStream.Position = 0;
 
+        var aiModelType = _aiModels is null ? (AiModelType?)null : await _aiModels.ResolveAsync(_currentUser.UserId, cancellationToken);
         var storageKey = GenerateStorageKey();
 
         string? storedStorageKey = null;
@@ -115,8 +116,8 @@ public class DocumentService : IDocumentService
             contentHash: contentHash,
             storageKey: storedStorageKey,
             ownerId: _currentUser.UserId);
-        if (_aiModels is not null)
-            document.SelectAiModel(await _aiModels.ResolveAsync(_currentUser.UserId, cancellationToken));
+        if (aiModelType is { } selectedModel)
+            document.SelectAiModel(selectedModel);
 
         try
         {
