@@ -43,7 +43,7 @@ npm run evaluate:predict -- --limit 10   # omit --limit for all 50
 npm run evaluate:report                  # writes evaluation-data/generated/report.json
 ```
 
-`evaluate:predict` uses the same prompt (`InvoiceExtractor.BuildPrompt`), provider and validation rules as the worker, so the report measures production behaviour. Line items are returned as text by the extraction schema, so `lineItems` scores 0 until the schema returns structured rows.
+`evaluate:predict` uses the same prompt (`InvoiceExtractor.BuildPrompt`), provider and validation rules as the worker, so the report measures production behaviour. Line items are returned as text by the extraction schema, so predictions list `lineItems` in `unscoredFields` and it is left out of the accuracy until the schema returns structured rows.
 
 In CI, `.github/workflows/evaluation.yml` runs nightly and on demand. It is skipped unless the `AI_API_KEY` secret is set; the model and prices come from the `AI_ENDPOINT`, `AI_MODEL`, `AI_API_KEY_HEADER`, `AI_INPUT_COST_PER_MILLION` and `AI_OUTPUT_COST_PER_MILLION` repository variables. The report is in the job summary and the `model-evaluation` artifact.
 

@@ -68,9 +68,10 @@ foreach (var line in lines)
             ["subtotal"] = result.Subtotal,
             ["taxAmount"] = result.TaxAmount,
             ["totalAmount"] = result.TotalAmount,
-            // The extraction schema returns line items as text, not structured rows, so they aren't scored.
             ["lineItems"] = null
         },
+        // The extraction schema returns line items as text, not structured rows, so they aren't scored.
+        ["unscoredFields"] = new JsonArray("lineItems"),
         ["durationMs"] = stopwatch.Elapsed.TotalMilliseconds,
         ["inferenceDurationMs"] = inferenceMs
     };

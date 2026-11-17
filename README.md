@@ -214,6 +214,7 @@ The evaluator consumes one prediction JSON object per line. Each record must inc
 - `id`: an ID from the dataset.
 - `success`, `valid`, `requiresHumanReview`: boolean outcomes.
 - `fields`: all nine keys `invoiceNumber`, `supplierName`, `invoiceDate`, `dueDate`, `currency`, `subtotal`, `taxAmount`, `totalAmount`, and `lineItems`. Use `null` for a missing field.
+- Optional `unscoredFields`: field names the model cannot produce; they are left out of the accuracy instead of counting as missing.
 - Optional non-negative telemetry: `durationMs`, `ocrDurationMs`, `inferenceDurationMs`, `queueWaitMs`, `retryCount`, and `aiCostUsd`.
 
 Run the scorecard with:

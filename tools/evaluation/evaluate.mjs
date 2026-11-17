@@ -67,6 +67,11 @@ export function validatePredictionSchema(prediction) {
     Object.hasOwn(prediction.fields, field) && isFieldValueValid(field, prediction.fields[field]))) {
     return false;
   }
+  if (prediction.unscoredFields !== undefined &&
+      (!Array.isArray(prediction.unscoredFields) ||
+       !prediction.unscoredFields.every(field => fieldNames.includes(field)))) {
+    return false;
+  }
   for (const key of ["durationMs", "ocrDurationMs", "inferenceDurationMs", "queueWaitMs", "aiCostUsd", "retryCount"]) {
     if (prediction[key] !== undefined &&
         (typeof prediction[key] !== "number" || !Number.isFinite(prediction[key]) || prediction[key] < 0)) {
@@ -160,7 +165,9 @@ export function evaluateDataset(dataset, predictions) {
 
     const differences = [];
     const fields = prediction.fields ?? {};
+    const unscoredFields = Array.isArray(prediction.unscoredFields) ? prediction.unscoredFields : [];
     for (const field of fieldNames) {
+      if (unscoredFields.includes(field)) continue;
       const expected = record.expected[field];
       const actual = fields[field] ?? null;
       const counts = fieldCounts[field];
