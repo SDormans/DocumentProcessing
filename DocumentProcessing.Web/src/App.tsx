@@ -1,8 +1,9 @@
 import React from 'react';
 import { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { DocumentList } from './components/DocumentList';
 import { DocumentDetail } from './components/DocumentDetail';
+import { ReviewQueue } from './components/ReviewQueue';
 import { AiModelSelector } from './components/AiModelSelector';
 import { xsrfHeaders } from './csrf';
 
@@ -70,6 +71,7 @@ const App: React.FC = () => {
       <main className="app-shell">
         <form className="sign-in" onSubmit={signIn}>
           <h1>Document Processing</h1>
+          <nav className="app-nav"><Link to="/">Documents</Link> <Link to="/review-queue">Review queue</Link></nav>
           <p>Sign in to review uploaded documents.</p>
           <label htmlFor="username">Username</label>
           <input id="username" autoComplete="username" required value={username}
@@ -91,6 +93,7 @@ const App: React.FC = () => {
       <main className="app-shell">
         <header className="app-header">
           <h1>Document Processing</h1>
+          <nav className="app-nav"><Link to="/">Documents</Link> <Link to="/review-queue">Review queue</Link></nav>
           <AiModelSelector />
           <button type="button" onClick={signOut}>Sign out</button>
         </header>
@@ -98,6 +101,7 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/" element={<DocumentList />} />
           <Route path="/documents/:documentId" element={<DocumentDetail />} />
+          <Route path="/review-queue" element={<ReviewQueue />} />
         </Routes>
       </main>
     </Router>
