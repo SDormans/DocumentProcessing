@@ -83,6 +83,8 @@ Older configuration with flat keys (`Ai:Provider`, `Ai:Endpoint`, `Ai:ApiKey`, `
 | `DEMO_ADMIN_USERNAME`, `DEMO_ADMIN_PASSWORD`, `DEMO_ADMIN_EMAIL` | `Authentication:Bootstrap:*` |
 | `AI_PROVIDER`, `AI_ENDPOINT`, `AI_API_KEY`, `AI_MODEL` | `Ai:Cloud:*` (worker) |
 | `AI_LOCAL_PROVIDER`, `AI_LOCAL_ENDPOINT`, `AI_LOCAL_MODEL` | `Ai:Local:*` (API and worker) |
+| `AI_LOCAL_ATTEMPT_TIMEOUT_SECONDS`, `AI_LOCAL_TOTAL_TIMEOUT_SECONDS` | `Ai:Local:AttemptTimeoutSeconds`, `Ai:Local:TotalTimeoutSeconds` (API and worker) |
+| `LLAMA_MODEL_FILE`, `LLAMA_CTX_SIZE`, `LLAMACPP_PORT` | `llamacpp` service: model file in `models/`, context size, host port (`8082`) |
 | `AI_DEFAULT_MODEL_TYPE`, `AI_FALLBACK_MODE` | `Ai:DefaultModelType`, `Ai:Fallback:Mode` (API and worker) |
 | `FILE_STORAGE_PROVIDER`, `AZURE_BLOB_*` | `FileStorage:*` |
 | `LOG_FORMAT` | `Logging:Console:FormatterName` |
@@ -137,4 +139,31 @@ AI_LOCAL_ENDPOINT=http://ollama:11434/v1/
 AI_LOCAL_MODEL=llama3.1:8b
 ```
 
-and restart the API and worker. For llama.cpp, start `llama-server -m model.gguf --port 8080` and point `AI_LOCAL_ENDPOINT` at `http://host.docker.internal:8080/v1/`. Score a local model on the evaluation set before relying on it; small models are noticeably less accurate than hosted ones.
+and restart the API and worker. Score a local model on the evaluation set before relying on it; small models are noticeably less accurate than hosted ones.
+
+### Running a model file from the repo with llama.cpp
+
+Put a `.gguf` model file in `models/` (git-ignored and excluded from Docker build contexts; see [`models/README.md`](../../models/README.md) for a suggested model). Then set in `.env`:
+
+```text
+LLAMA_MODEL_FILE=qwen2.5-3b-instruct-q4_k_m.gguf
+AI_LOCAL_PROVIDER=OpenAI
+AI_LOCAL_ENDPOINT=http://llamacpp:8080/v1/
+AI_LOCAL_MODEL=local-model
+```
+
+and start everything with `docker compose --profile llamacpp up -d`. The `llamacpp` service runs `llama-server` on the CPU (same on macOS, Linux and Windows), mounts `models/` read-only and answers to `AI_LOCAL_MODEL` as the model name, so the availability check finds it. It is also published on `http://localhost:8082/v1/` (`LLAMACPP_PORT`) for an API and worker started with `dotnet run`. GPU acceleration is not configured.
+
+### Using a model runtime on your own machine
+
+To use Ollama, LM Studio or `llama-server` installed directly on your machine (for example to use its GPU), point the containers at the host:
+
+```text
+AI_LOCAL_PROVIDER=OpenAI
+AI_LOCAL_ENDPOINT=http://host.docker.internal:11434/v1/
+AI_LOCAL_MODEL=llama3.1:8b
+```
+
+Docker Desktop provides `host.docker.internal` on macOS and Windows; on Linux, Compose maps it for the API and worker (`extra_hosts: host-gateway`). The runtime must accept connections from containers: start Ollama with `OLLAMA_HOST=0.0.0.0`, `llama-server` with `--host 0.0.0.0`, and enable "Serve on local network" in LM Studio. Without Docker, use `http://localhost:<port>/v1/`.
+
+**Timeouts.** A CPU model can need minutes per invoice. Raise `AI_LOCAL_ATTEMPT_TIMEOUT_SECONDS` / `AI_LOCAL_TOTAL_TIMEOUT_SECONDS` (default `60` / `180`) when extractions time out. A document can make two model calls (extraction and a correction pass), and the worker holds a document for `QueueProcessing:LeaseDuration` (5 minutes) before another worker may reclaim it, so keep twice the total timeout within the lease or raise the lease too.

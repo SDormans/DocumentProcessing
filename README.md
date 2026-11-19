@@ -127,6 +127,8 @@ The choice is saved on the user's account, so it survives signing out and applie
 |---|---|---|
 | `AI_PROVIDER`, `AI_ENDPOINT`, `AI_API_KEY`, `AI_MODEL` | `Ai:Cloud:*` | Cloud model: `Fake` (default), `OpenAI`, `Anthropic` or `None` |
 | `AI_LOCAL_PROVIDER`, `AI_LOCAL_ENDPOINT`, `AI_LOCAL_MODEL` | `Ai:Local:*` | Local model: `None` (default, hidden), `OpenAI` (any OpenAI-compatible server) or `Fake` |
+| `AI_LOCAL_ATTEMPT_TIMEOUT_SECONDS`, `AI_LOCAL_TOTAL_TIMEOUT_SECONDS` | `Ai:Local:AttemptTimeoutSeconds`, `Ai:Local:TotalTimeoutSeconds` | Per-request and overall timeout for the local model (`60` / `180`) |
+| `LLAMA_MODEL_FILE`, `LLAMA_CTX_SIZE`, `LLAMACPP_PORT` | `llamacpp` service | `.gguf` file in `models/`, context size (`8192`), host port (`8082`) |
 | `AI_DEFAULT_MODEL_TYPE` | `Ai:DefaultModelType` | `Cloud` (default) or `Local`, for users who have not chosen |
 | `AI_FALLBACK_MODE` | `Ai:Fallback:Mode` | `None` (default) or `Automatic`; see below |
 
@@ -140,6 +142,12 @@ docker compose exec ollama ollama pull llama3.1:8b
 ```
 
 Set `AI_LOCAL_PROVIDER=OpenAI`, `AI_LOCAL_ENDPOINT=http://ollama:11434/v1/` and `AI_LOCAL_MODEL=llama3.1:8b` in `.env`, then `docker compose up -d api worker`. Score a local model with the evaluation tooling before relying on it; small models are usually less accurate than hosted ones.
+
+**Use a model file in the repo:** put a `.gguf` file in [`models/`](models/README.md) (git-ignored), set `LLAMA_MODEL_FILE=<file>.gguf`, `AI_LOCAL_PROVIDER=OpenAI`, `AI_LOCAL_ENDPOINT=http://llamacpp:8080/v1/` and `AI_LOCAL_MODEL=local-model` in `.env`, then run `docker compose --profile llamacpp up -d`. llama.cpp serves it on the CPU, so this works the same on macOS, Linux and Windows.
+
+**Use a runtime already on your machine** (Ollama, LM Studio, `llama-server`): set `AI_LOCAL_ENDPOINT=http://host.docker.internal:<port>/v1/` and `AI_LOCAL_MODEL` to a model it serves. The API and worker containers map `host.docker.internal` on every OS. The runtime must listen on all interfaces, not only `127.0.0.1` (Ollama: `OLLAMA_HOST=0.0.0.0`).
+
+Local models on a CPU can take minutes per invoice; raise `AI_LOCAL_ATTEMPT_TIMEOUT_SECONDS` and `AI_LOCAL_TOTAL_TIMEOUT_SECONDS` if extractions time out.
 
 **When the chosen model fails:**
 
