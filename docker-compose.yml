@@ -103,6 +103,9 @@ services:
       Ai__Local__TotalTimeoutSeconds: ${AI_LOCAL_TOTAL_TIMEOUT_SECONDS:-180}
       Ai__DefaultModelType: ${AI_DEFAULT_MODEL_TYPE:-Cloud}
       Ai__Fallback__Mode: ${AI_FALLBACK_MODE:-None}
+      # ClamAv: start with `--profile malware-scan`; the worker retries until clamd is up (fail closed).
+      MalwareScanning__Provider: ${MALWARE_SCANNER:-None}
+      MalwareScanning__ClamAvHost: clamav
       Logging__Console__FormatterName: ${LOG_FORMAT:-}
       # The worker polls the queue every few seconds; don't log each SQL command.
       Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: ${WORKER_SQL_LOG_LEVEL:-Warning}
@@ -117,6 +120,11 @@ services:
         condition: service_healthy
     volumes:
       - document_storage_demo:/app/data/storage
+    restart: unless-stopped
+
+  clamav:
+    image: clamav/clamav:1.4
+    profiles: [malware-scan]
     restart: unless-stopped
 
   web:

@@ -21,7 +21,7 @@ builder.Services
     .AddApiRateLimiting(builder.Configuration)
     .AddApiAntiforgery(builder.Configuration, builder.Environment)
     .AddCookieAuthentication(builder.Configuration, builder.Environment)
-    .AddAuthorizationPolicies()
+    .AddAuthorizationPolicies(builder.Configuration.GetValue<bool>("Authentication:RequireAdminMfa"))
     .AddTrustedForwardedHeaders(builder.Configuration)
     .AddPersistentDataProtection(builder.Configuration);
 

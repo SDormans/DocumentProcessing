@@ -75,6 +75,24 @@ Older configuration with flat keys (`Ai:Provider`, `Ai:Endpoint`, `Ai:ApiKey`, `
 
 `Ai:MaxCostPerDocument` (default unset) is the per-document AI cost budget, in the currency of `Ai:InputCostPerMillionTokens`/`OutputCostPerMillionTokens`. Reaching it skips the correction pass.
 
+## Malware scanning (`MalwareScanning:*`)
+
+| Key | Default | Notes |
+|---|---|---|
+| `MalwareScanning:Provider` | `None` | `ClamAv` in any shared environment. `None` skips scanning |
+| `MalwareScanning:ClamAvHost`, `ClamAvPort` | `clamav`, `3310` | `clamd` address |
+| `MalwareScanning:TimeoutSeconds` | `60` | Per file; a timeout is retried like any transient error |
+
+## Retention (`Retention:*`)
+
+| Key | Default | Notes |
+|---|---|---|
+| `Retention:CompletedDocumentRetention` | `2557.00:00:00` (7 years) | Set on approval as `RetainUntilUtc`. Agree the period with the data owner |
+| `Retention:PurgeInterval` | `01:00:00` | How often the worker deletes expired documents |
+| `Retention:PurgeBatchSize` | `100` | Documents deleted per run |
+
+`Authentication:RequireAdminMfa` (default `false`): when `true`, admin endpoints (`IsAdmin`) need a session signed in with an authenticator code. Set it in every shared environment once the admins have enrolled.
+
 ## Docker Compose (`.env`)
 
 | Variable | Maps to |

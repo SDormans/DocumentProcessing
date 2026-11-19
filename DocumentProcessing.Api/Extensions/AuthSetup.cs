@@ -51,7 +51,12 @@ public static class AuthSetup
         return services;
     }
 
-    public static IServiceCollection AddAuthorizationPolicies(this IServiceCollection services)
+    /// <summary>Claim added at sign-in when an authenticator code was checked.</summary>
+    public const string MfaClaimType = "amr";
+    public const string MfaClaimValue = "mfa";
+
+    /// <param name="requireAdminMfa">When true, admin endpoints require a session signed in with an authenticator code.</param>
+    public static IServiceCollection AddAuthorizationPolicies(this IServiceCollection services, bool requireAdminMfa = false)
     {
         services.AddAuthorization(options =>
         {
@@ -61,8 +66,11 @@ public static class AuthSetup
                 policy.RequireAuthenticatedUser()
                     .RequireRole(ReviewRoles.CanApproveOrReject));
             options.AddPolicy("IsAdmin", policy =>
-                policy.RequireAuthenticatedUser()
-                    .RequireRole("Admin"));
+            {
+                policy.RequireAuthenticatedUser().RequireRole("Admin");
+                if (requireAdminMfa)
+                    policy.RequireClaim(MfaClaimType, MfaClaimValue);
+            });
         });
         return services;
     }

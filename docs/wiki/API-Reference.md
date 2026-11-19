@@ -13,6 +13,8 @@ In Development, Swagger UI is available at `/swagger`.
 | GET | `/api/auth/me` | Signed in | Current user and roles; refreshes `XSRF-TOKEN` |
 | POST | `/api/auth/register` | `IsAdmin` | `{ "username", "password", "email", "role" }` (`role`: `Admin` or `Reviewer`) |
 
+Two-factor sign-in: `POST /api/auth/mfa/setup` (signed in) returns `sharedKey` and `authenticatorUri`; `POST /api/auth/mfa/enable` with `{ "code": "123456" }` returns `204` or `400`. Once enabled, `POST /api/auth/login` without `twoFactorCode` returns `401` with `requiresTwoFactor: true`.
+
 ## Documents
 
 | Method | Path | Access | Notes |
@@ -21,7 +23,8 @@ In Development, Swagger UI is available at `/swagger`.
 | GET | `/api/documents?skip=0&take=50` | Signed in | Own documents, newest first; all for unrestricted roles. `take` 1–200; total in `X-Total-Count` |
 | GET | `/api/documents/{id}` | Signed in, owner | `404` if missing **or not yours** |
 | POST | `/api/documents/{id}/requeue` | `IsAdmin` | Re-queues a `Failed` document. `202`, `404` missing, `409` not failed (including `Rejected`) or already re-queued by a concurrent request |
-| GET | `/api/documents/{id}/content` | Signed in, owner | The PDF |
+| GET | `/api/documents/{id}/content` | Signed in, owner | The PDF; `404` for `Quarantined` documents |
+| DELETE | `/api/documents/{id}` | `IsAdmin` | Erases the document, file, results, review and audit trail. `204`, `404` |
 
 ## Review
 

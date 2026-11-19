@@ -167,6 +167,9 @@ namespace DocumentProcessing.Infrastructure.Data.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("character varying(450)");
 
+                    b.Property<DateTime?>("RetainUntilUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -178,6 +181,8 @@ namespace DocumentProcessing.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("RetainUntilUtc");
 
                     b.HasIndex("Status");
 

@@ -97,4 +97,43 @@ public class IdentityUserService : IUserService
             Roles = roles
         };
     }
+
+    public async Task<bool> IsTwoFactorEnabledAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var user = await _userManager.FindByIdAsync(userId);
+        return user is not null && await _userManager.GetTwoFactorEnabledAsync(user);
+    }
+
+    public async Task<bool> VerifyTwoFactorCodeAsync(string userId, string code, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var user = await _userManager.FindByIdAsync(userId);
+        return user is not null && await _userManager.VerifyTwoFactorTokenAsync(
+            user, _userManager.Options.Tokens.AuthenticatorTokenProvider, NormalizeCode(code));
+    }
+
+    public async Task<AuthenticatorSetup> ResetAuthenticatorAsync(string userId, string issuer, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var user = await _userManager.FindByIdAsync(userId)
+            ?? throw new InvalidOperationException("User not found.");
+        await _userManager.SetTwoFactorEnabledAsync(user, false);
+        await _userManager.ResetAuthenticatorKeyAsync(user);
+        var key = await _userManager.GetAuthenticatorKeyAsync(user)
+            ?? throw new InvalidOperationException("No authenticator key was generated.");
+        var uri = $"otpauth://totp/{Uri.EscapeDataString(issuer)}:{Uri.EscapeDataString(user.UserName ?? userId)}" +
+                  $"?secret={key}&issuer={Uri.EscapeDataString(issuer)}&digits=6";
+        return new AuthenticatorSetup(key, uri);
+    }
+
+    public async Task<bool> EnableTwoFactorAsync(string userId, string code, CancellationToken cancellationToken = default)
+    {
+        if (!await VerifyTwoFactorCodeAsync(userId, code, cancellationToken))
+            return false;
+        var user = await _userManager.FindByIdAsync(userId);
+        return user is not null && (await _userManager.SetTwoFactorEnabledAsync(user, true)).Succeeded;
+    }
+
+    private static string NormalizeCode(string code) => code.Replace(" ", string.Empty).Replace("-", string.Empty);
 }

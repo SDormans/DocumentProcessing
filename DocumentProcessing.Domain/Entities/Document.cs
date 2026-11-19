@@ -12,7 +12,10 @@ public enum DocumentStatus
     Completed,
     Failed,
     // Stored as an integer: append new values, never reorder.
-    Rejected
+    Rejected,
+
+    /// <summary>The malware scanner flagged the file; it is never processed or served.</summary>
+    Quarantined
 }
 
 public class Document
@@ -68,6 +71,17 @@ public class Document
     /// The model type the uploader chose. The worker extracts with this model unless fallback is enabled.
     /// </summary>
     public AiModelType AiModelType { get; private set; } = AiModelType.Cloud;
+
+    /// <summary>
+    /// When the document and everything derived from it is deleted. Set when the review completes;
+    /// null means kept until deleted by an admin.
+    /// </summary>
+    public DateTime? RetainUntilUtc { get; private set; }
+
+    public void SetRetention(DateTime retainUntilUtc)
+    {
+        RetainUntilUtc = retainUntilUtc;
+    }
 
     public static Document Create(
         string originalFileName,
@@ -128,6 +142,7 @@ public class Document
         (DocumentStatus.Processing, DocumentStatus.NeedsReview) => true,
         (DocumentStatus.Processing, DocumentStatus.Completed) => true,
         (DocumentStatus.Processing, DocumentStatus.Failed) => true,
+        (DocumentStatus.Processing, DocumentStatus.Quarantined) => true,
 
         (DocumentStatus.NeedsReview, DocumentStatus.Completed) => true,
         (DocumentStatus.NeedsReview, DocumentStatus.Failed) => true,

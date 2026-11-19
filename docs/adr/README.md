@@ -11,3 +11,4 @@ Short records of significant decisions, in the [Michael Nygard format](https://c
 | [0005](0005-openai-compatible-strict-schema.md) | OpenAI-compatible HTTP provider with a strict JSON schema | Accepted |
 | [0006](0006-squash-migrations-baseline.md) | Squash pre-release migrations into `InitialBaseline` | Accepted |
 | [0007](0007-cloud-and-local-models.md) | User-selectable cloud and local models, no silent fallback | Accepted |
+| [0008](0008-local-accounts-with-totp-mfa.md) | Keep local accounts, add authenticator-app MFA for admins | Accepted |

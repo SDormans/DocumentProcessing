@@ -2,6 +2,7 @@ using DocumentProcessing.Application.Services.Invoice;
 using DocumentProcessing.Domain.Interfaces;
 using DocumentProcessing.Infrastructure.Ai;
 using DocumentProcessing.Infrastructure.Ocr;
+using DocumentProcessing.Infrastructure.Security;
 using DocumentProcessing.Infrastructure.TextExtraction;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,6 +23,7 @@ public static class ExtractionServiceCollectionExtensions
         services.AddScoped<PdfPigTextExtractor>();
         services.AddScoped<IDocumentTextExtractor, HybridPdfTextExtractor>();
         services.AddAiProvider(configuration);
+        services.AddMalwareScanning(configuration);
         services.AddScoped<IInvoiceValidationRule>(_ => new MissingRequiredFieldsValidationRule());
         services.AddScoped<IInvoiceValidationRule, InvalidDateValidationRule>();
         services.AddScoped<IInvoiceValidationRule, InvalidNumericValuesValidationRule>();

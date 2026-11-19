@@ -23,6 +23,7 @@ public class DocumentConfiguration : IEntityTypeConfiguration<Document>
 
         builder.HasIndex(d => d.CreatedAtUtc);
         builder.HasIndex(d => d.Status);
+        builder.HasIndex(d => d.RetainUntilUtc);
         builder.HasIndex(d => new { d.OwnerId, d.CreatedAtUtc });
     }
 }

@@ -31,6 +31,7 @@ public class DocumentProcessingWorker : BackgroundService
         // Each command holds a slot until it finishes, so one slow document never blocks the others.
         var inFlight = new HashSet<Task>();
         var nextPurgeUtc = DateTime.UtcNow;
+        var nextRetentionPurgeUtc = DateTime.UtcNow;
         while (!stoppingToken.IsCancellationRequested)
         {
             if (DateTime.UtcNow >= nextPurgeUtc)
@@ -38,6 +39,9 @@ public class DocumentProcessingWorker : BackgroundService
                 nextPurgeUtc = DateTime.UtcNow + _options.PurgeInterval;
                 await PurgeCompletedCommandsAsync(stoppingToken);
             }
+
+            if (DateTime.UtcNow >= nextRetentionPurgeUtc)
+                nextRetentionPurgeUtc = DateTime.UtcNow + await PurgeExpiredDocumentsAsync(stoppingToken);
 
             var freeSlots = _options.BatchSize - inFlight.Count;
             if (freeSlots > 0)
@@ -76,6 +80,26 @@ public class DocumentProcessingWorker : BackgroundService
 
         await Task.WhenAll(inFlight);
         _logger.LogInformation("Document processing worker {WorkerId} stopped.", _workerId);
+    }
+
+    /// <returns>The time until the next purge (<c>Retention:PurgeInterval</c>).</returns>
+    internal async Task<TimeSpan> PurgeExpiredDocumentsAsync(CancellationToken stoppingToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var interval = (scope.ServiceProvider.GetService<IOptions<DocumentProcessing.Application.Services.RetentionOptions>>()?.Value
+            ?? new DocumentProcessing.Application.Services.RetentionOptions()).PurgeInterval;
+        try
+        {
+            var deleted = await scope.ServiceProvider.GetRequiredService<DocumentProcessing.Application.Services.IDocumentDeletion>()
+                .PurgeExpiredAsync(DateTime.UtcNow, stoppingToken);
+            if (deleted > 0)
+                _logger.LogInformation("Deleted {Count} document(s) past their retention period.", deleted);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Purging documents past their retention period failed.");
+        }
+        return interval;
     }
 
     internal async Task PurgeCompletedCommandsAsync(CancellationToken stoppingToken)

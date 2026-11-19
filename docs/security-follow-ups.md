@@ -1,6 +1,6 @@
 # Security follow-ups
 
-Two controls a production deployment needs that are not built yet. Both are tracked here so they are designed on purpose, not left out by accident.
+Both controls below are now implemented on `milestone/4-security`: ClamAV scanning with a `Quarantined` status (fail closed), and `RetainUntilUtc` with a scheduled purge and admin `DELETE /api/documents/{id}`. Still open: Defender for Storage as an alternative scanner, active-content stripping (malware item 5), Azure Blob lifecycle rules and soft delete (retention item 5), and documenting backup expiry (retention item 6).
 
 ## Malware scanning of uploaded PDFs
 

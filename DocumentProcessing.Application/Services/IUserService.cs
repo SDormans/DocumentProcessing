@@ -13,4 +13,19 @@ public interface IUserService
     Task<UserInfoDto?> GetUserByIdAsync(string userId, CancellationToken cancellationToken = default);
     Task<bool> UserExistsAsync(string username, CancellationToken cancellationToken = default);
     Task<UserInfoDto> CreateUserAsync(string username, string password, string email, string role, CancellationToken cancellationToken = default);
+
+    Task<bool> IsTwoFactorEnabledAsync(string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Checks an authenticator-app (TOTP) code.</summary>
+    Task<bool> VerifyTwoFactorCodeAsync(string userId, string code, CancellationToken cancellationToken = default);
+
+    /// <summary>Creates a new authenticator key. Two-factor sign-in stays off until <see cref="EnableTwoFactorAsync"/> succeeds.</summary>
+    Task<AuthenticatorSetup> ResetAuthenticatorAsync(string userId, string issuer, CancellationToken cancellationToken = default);
+
+    /// <summary>Turns on two-factor sign-in when <paramref name="code"/> matches the current key.</summary>
+    Task<bool> EnableTwoFactorAsync(string userId, string code, CancellationToken cancellationToken = default);
 }
+
+/// <param name="SharedKey">Base32 key to type into an authenticator app.</param>
+/// <param name="AuthenticatorUri"><c>otpauth://</c> URI to render as a QR code.</param>
+public sealed record AuthenticatorSetup(string SharedKey, string AuthenticatorUri);

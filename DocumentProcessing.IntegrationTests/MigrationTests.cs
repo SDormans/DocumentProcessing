@@ -118,7 +118,7 @@ public class MigrationTests(PostgresFixture postgres)
     {
         var connectionString = await postgres.CreateDatabaseAsync();
         await using var db = CreateContext(connectionString);
-        await db.Database.MigrateAsync();
+        await db.GetService<IMigrator>().MigrateAsync(MigrationBaseline.BaselineMigrationId);
         await RewriteHistoryAsync(connectionString, MigrationBaseline.LegacyMigrationIds.Take(5));
 
         var act = () => MigrationBaseline.AdoptLegacyHistoryAsync(db, NullLogger.Instance);

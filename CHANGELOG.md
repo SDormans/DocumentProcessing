@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Security
+- Two-factor sign-in with an authenticator app (TOTP): `POST /api/auth/mfa/setup` returns a key and `otpauth://` URI, `POST /api/auth/mfa/enable` confirms it; afterwards login needs `twoFactorCode`. `Authentication:RequireAdminMfa=true` makes admin endpoints require a session signed in with a code. Decision recorded in ADR 0008.
+- Retention and deletion: approving a document sets `RetainUntilUtc` (`Retention:CompletedDocumentRetention`, default 7 years); the worker deletes expired documents hourly. Admins can erase a document with `DELETE /api/documents/{id}` (204/404). Both delete the stored file, text extractions, queue commands, results, review and audit trail, and log only the id and reason. Migration `AddDocumentRetention`.
+- Malware scanning: the worker scans each file before parsing (`MalwareScanning:Provider=ClamAv`, `clamd` INSTREAM). Infected files become `Quarantined` and are never processed or served; an unreachable scanner retries instead of skipping the scan. Compose: `MALWARE_SCANNER=ClamAv docker compose --profile malware-scan up`.
+- CI `security-scan` job: vulnerable NuGet packages, `npm audit` of web production dependencies, and Trivy scans of the three images (fixable HIGH/CRITICAL fail).
+
 ### Fixed
 - Rejected documents no longer become `Failed` (which let them be re-queued and then stuck as "already decided"): they get a final `Rejected` status. A migration moves existing rejected documents over.
 - The worker renews its queue lease throughout OCR and AI extraction (`QueueProcessing:LeaseRenewalInterval`), so a second worker can't reclaim a long-running document; a lost lease cancels the attempt.
