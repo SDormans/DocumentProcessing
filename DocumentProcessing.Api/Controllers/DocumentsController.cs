@@ -253,6 +253,7 @@ public class DocumentsController : ControllerBase
     [HttpGet("{id:guid}/content")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> GetDocumentContent(Guid id, CancellationToken cancellationToken)
     {
         try
@@ -266,6 +267,9 @@ public class DocumentsController : ControllerBase
                     Message = $"Document with ID {id} not found."
                 });
             }
+
+            if (fileDto.CouldNotSanitize)
+                return UnprocessableEntity(Error("The PDF could not be made safe to display."));
 
             return File(fileDto.Stream, fileDto.ContentType, fileDto.FileName);
         }

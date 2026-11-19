@@ -22,6 +22,7 @@ public class DocumentService : IDocumentService
     private readonly DocumentServiceOptions _options;
     private readonly ICurrentUser _currentUser;
     private readonly AiModelSettingsService? _aiModels;
+    private readonly IPdfSanitizer? _pdfSanitizer;
 
     public DocumentService(
         IDocumentRepository documentRepository,
@@ -30,8 +31,10 @@ public class DocumentService : IDocumentService
         ILogger<DocumentService> logger,
         IOptions<DocumentServiceOptions> options,
         ICurrentUser currentUser,
-        AiModelSettingsService? aiModels = null)
+        AiModelSettingsService? aiModels = null,
+        IPdfSanitizer? pdfSanitizer = null)
     {
+        _pdfSanitizer = pdfSanitizer;
         _currentUser = currentUser;
         _aiModels = aiModels;
         _documentRepository = documentRepository;
@@ -272,6 +275,25 @@ public class DocumentService : IDocumentService
         }
 
         var stream = await _fileStorage.OpenReadAsync(document.StorageKey, cancellationToken);
+        if (_pdfSanitizer is not null)
+        {
+            byte[] original;
+            await using (stream)
+            {
+                using var buffer = new MemoryStream();
+                await stream.CopyToAsync(buffer, cancellationToken);
+                original = buffer.ToArray();
+            }
+
+            var sanitized = _pdfSanitizer.Sanitize(original);
+            if (sanitized is null)
+            {
+                _logger.LogWarning("Document {DocumentId} is not served because its active content could not be removed.", id);
+                return new DocumentFileDto { CouldNotSanitize = true, FileName = document.OriginalFileName };
+            }
+            stream = new MemoryStream(sanitized, writable: false);
+        }
+
         return new DocumentFileDto
         {
             Stream = stream,

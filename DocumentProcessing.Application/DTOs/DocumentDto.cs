@@ -33,6 +33,9 @@ public class DocumentFileDto
     public Stream Stream { get; set; } = Stream.Null;
     public string ContentType { get; set; } = "application/pdf";
     public string FileName { get; set; } = string.Empty;
+
+    /// <summary>True when the PDF could not be rebuilt without active content; it is then not served.</summary>
+    public bool CouldNotSanitize { get; set; }
 }
 public class RetryWithModelRequest
 {
