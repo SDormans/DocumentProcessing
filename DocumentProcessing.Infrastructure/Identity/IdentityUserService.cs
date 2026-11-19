@@ -135,5 +135,34 @@ public class IdentityUserService : IUserService
         return user is not null && (await _userManager.SetTwoFactorEnabledAsync(user, true)).Succeeded;
     }
 
+    public async Task<IReadOnlyList<string>> GenerateRecoveryCodesAsync(string userId, int count, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var user = await _userManager.FindByIdAsync(userId)
+            ?? throw new InvalidOperationException("User not found.");
+        return (await _userManager.GenerateNewTwoFactorRecoveryCodesAsync(user, count))?.ToList()
+            ?? throw new InvalidOperationException("No recovery codes were generated.");
+    }
+
+    public async Task<bool> RedeemRecoveryCodeAsync(string userId, string code, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var user = await _userManager.FindByIdAsync(userId);
+        return user is not null && (await _userManager.RedeemTwoFactorRecoveryCodeAsync(user, code.Trim())).Succeeded;
+    }
+
+    public async Task<bool> ResetTwoFactorAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user is null)
+            return false;
+        await _userManager.SetTwoFactorEnabledAsync(user, false);
+        await _userManager.ResetAuthenticatorKeyAsync(user);
+        await _userManager.GenerateNewTwoFactorRecoveryCodesAsync(user, 0);
+        await _userManager.UpdateSecurityStampAsync(user);
+        return true;
+    }
+
     private static string NormalizeCode(string code) => code.Replace(" ", string.Empty).Replace("-", string.Empty);
 }

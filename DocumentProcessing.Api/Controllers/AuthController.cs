@@ -58,9 +58,18 @@ public class AuthController : ControllerBase
         var usedMfa = false;
         if (await _userService.IsTwoFactorEnabledAsync(user.UserId, cancellationToken))
         {
-            if (string.IsNullOrWhiteSpace(request.TwoFactorCode))
+            if (!string.IsNullOrWhiteSpace(request.RecoveryCode))
+            {
+                if (!await _userService.RedeemRecoveryCodeAsync(user.UserId, request.RecoveryCode, cancellationToken))
+                {
+                    _logger.LogWarning("Recovery code rejected for user {UserId}.", user.UserId);
+                    return Unauthorized(new { message = "Invalid recovery code.", requiresTwoFactor = true });
+                }
+                _logger.LogWarning("User {UserId} signed in with a recovery code.", user.UserId);
+            }
+            else if (string.IsNullOrWhiteSpace(request.TwoFactorCode))
                 return Unauthorized(new { message = "Two-factor code required.", requiresTwoFactor = true });
-            if (!await _userService.VerifyTwoFactorCodeAsync(user.UserId, request.TwoFactorCode, cancellationToken))
+            else if (!await _userService.VerifyTwoFactorCodeAsync(user.UserId, request.TwoFactorCode, cancellationToken))
             {
                 _logger.LogWarning("Two-factor code rejected for user {UserId}.", user.UserId);
                 return Unauthorized(new { message = "Invalid two-factor code.", requiresTwoFactor = true });
@@ -109,10 +118,10 @@ public class AuthController : ControllerBase
         return Ok(await _userService.ResetAuthenticatorAsync(userId, "DocumentProcessing", cancellationToken));
     }
 
-    /// <summary>Confirms enrolment with a code from the app; later sign-ins then need a code.</summary>
+    /// <summary>Confirms enrolment with a code from the app and returns one-time recovery codes; later sign-ins need a code.</summary>
     [HttpPost("mfa/enable")]
     [Authorize]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(RecoveryCodesResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> EnableTwoFactor([FromBody] EnableTwoFactorRequest request, CancellationToken cancellationToken)
     {
@@ -120,8 +129,38 @@ public class AuthController : ControllerBase
         if (!await _userService.EnableTwoFactorAsync(userId, request.Code, cancellationToken))
             return BadRequest(new { message = "Invalid two-factor code." });
         _logger.LogInformation("User {UserId} enabled two-factor sign-in.", userId);
+        return Ok(new RecoveryCodesResponse(await _userService.GenerateRecoveryCodesAsync(userId, RecoveryCodeCount, cancellationToken)));
+    }
+
+    /// <summary>Replaces the signed-in user's recovery codes. Requires two-factor sign-in to be enabled.</summary>
+    [HttpPost("mfa/recovery-codes")]
+    [Authorize]
+    [ProducesResponseType(typeof(RecoveryCodesResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RegenerateRecoveryCodes(CancellationToken cancellationToken)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+        if (!await _userService.IsTwoFactorEnabledAsync(userId, cancellationToken))
+            return Conflict(new { message = "Two-factor sign-in is not enabled." });
+        _logger.LogInformation("User {UserId} regenerated recovery codes.", userId);
+        return Ok(new RecoveryCodesResponse(await _userService.GenerateRecoveryCodesAsync(userId, RecoveryCodeCount, cancellationToken)));
+    }
+
+    /// <summary>Turns off two-factor sign-in for a user who lost their authenticator app (admins only); they can enrol again.</summary>
+    [HttpPost("users/{userId}/mfa/reset")]
+    [Authorize(Policy = "IsAdmin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ResetUserTwoFactor(string userId, CancellationToken cancellationToken)
+    {
+        if (!await _userService.ResetTwoFactorAsync(userId, cancellationToken))
+            return NotFound(new { message = "User not found." });
+        _logger.LogWarning("Two-factor sign-in for user {UserId} was reset by {AdminId}.", userId,
+            User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "unknown");
         return NoContent();
     }
+
+    private const int RecoveryCodeCount = 10;
 
     /// <summary>
     /// Signs the current user out.
@@ -218,7 +257,12 @@ public class LoginRequest
 
     /// <summary>Authenticator-app code; required once two-factor sign-in is enabled.</summary>
     public string? TwoFactorCode { get; set; }
+
+    /// <summary>One-time recovery code, used instead of <see cref="TwoFactorCode"/> when the authenticator app is lost.</summary>
+    public string? RecoveryCode { get; set; }
 }
+
+public sealed record RecoveryCodesResponse(IReadOnlyList<string> RecoveryCodes);
 
 public class EnableTwoFactorRequest
 {

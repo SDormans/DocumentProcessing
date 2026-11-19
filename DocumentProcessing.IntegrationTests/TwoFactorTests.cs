@@ -33,8 +33,9 @@ public class TwoFactorTests(PostgresFixture postgres) : IAsyncLifetime
 
             (await admin.SendAsync(HttpMethod.Post, "/api/auth/mfa/enable", JsonContent.Create(new { code = "000000" })))
                 .StatusCode.Should().Be(HttpStatusCode.BadRequest);
-            (await admin.SendAsync(HttpMethod.Post, "/api/auth/mfa/enable", JsonContent.Create(new { code = Totp(key) })))
-                .StatusCode.Should().Be(HttpStatusCode.NoContent);
+            var enabled = await admin.SendAsync(HttpMethod.Post, "/api/auth/mfa/enable", JsonContent.Create(new { code = Totp(key) }));
+            enabled.StatusCode.Should().Be(HttpStatusCode.OK);
+            (await enabled.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("recoveryCodes").GetArrayLength().Should().Be(10);
         }
 
         using var client = _factory.CreateApiClient();
@@ -48,6 +49,43 @@ public class TwoFactorTests(PostgresFixture postgres) : IAsyncLifetime
         (await client.Http.PostAsJsonAsync("/api/auth/login",
             new { username = ApiFactory.AdminUserName, password = ApiFactory.AdminPassword, twoFactorCode = Totp(key) }))
             .StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Recovery_codes_work_once_and_admin_reset_turns_two_factor_off()
+    {
+        const string password = "Bob-Pass-1234!";
+        using var admin = _factory.CreateApiClient();
+        (await admin.LoginAsync(ApiFactory.AdminUserName, ApiFactory.AdminPassword)).EnsureSuccessStatusCode();
+        (await admin.CreateUserAsync("bob", password, "Reviewer")).EnsureSuccessStatusCode();
+
+        string[] codes;
+        string bobId;
+        using (var bob = _factory.CreateApiClient())
+        {
+            (await bob.LoginAsync("bob", password)).EnsureSuccessStatusCode();
+            bobId = (await bob.Http.GetFromJsonAsync<JsonElement>("/api/auth/me")).GetProperty("userId").GetString()!;
+            (await bob.SendAsync(HttpMethod.Post, "/api/auth/mfa/recovery-codes")).StatusCode.Should().Be(HttpStatusCode.Conflict);
+            var key = (await (await bob.SendAsync(HttpMethod.Post, "/api/auth/mfa/setup")).Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("sharedKey").GetString()!;
+            var enabled = await bob.SendAsync(HttpMethod.Post, "/api/auth/mfa/enable", JsonContent.Create(new { code = Totp(key) }));
+            codes = (await enabled.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("recoveryCodes")
+                .EnumerateArray().Select(c => c.GetString()!).ToArray();
+        }
+
+        using var client = _factory.CreateApiClient();
+        object Login(string? recoveryCode) => new { username = "bob", password, recoveryCode };
+        (await client.Http.PostAsJsonAsync("/api/auth/login", Login("not-a-code"))).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await client.Http.PostAsJsonAsync("/api/auth/login", Login(codes[0]))).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await client.Http.PostAsJsonAsync("/api/auth/login", Login(codes[0]))).StatusCode.Should().Be(HttpStatusCode.Unauthorized, "each code works once");
+
+        (await client.SendAsync(HttpMethod.Post, $"/api/auth/users/{bobId}/mfa/reset")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await admin.SendAsync(HttpMethod.Post, "/api/auth/users/no-such-user/mfa/reset")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await admin.SendAsync(HttpMethod.Post, $"/api/auth/users/{bobId}/mfa/reset")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        using var afterReset = _factory.CreateApiClient();
+        (await afterReset.LoginAsync("bob", password)).StatusCode.Should().Be(HttpStatusCode.OK, "two-factor sign-in is off after the reset");
+        (await afterReset.Http.PostAsJsonAsync("/api/auth/login", Login(codes[1]))).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Theory]

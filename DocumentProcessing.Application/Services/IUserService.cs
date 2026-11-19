@@ -24,6 +24,15 @@ public interface IUserService
 
     /// <summary>Turns on two-factor sign-in when <paramref name="code"/> matches the current key.</summary>
     Task<bool> EnableTwoFactorAsync(string userId, string code, CancellationToken cancellationToken = default);
+
+    /// <summary>Replaces the user's one-time recovery codes; only the new codes work afterwards.</summary>
+    Task<IReadOnlyList<string>> GenerateRecoveryCodesAsync(string userId, int count, CancellationToken cancellationToken = default);
+
+    /// <summary>Signs in with a recovery code instead of an authenticator code; each code works once.</summary>
+    Task<bool> RedeemRecoveryCodeAsync(string userId, string code, CancellationToken cancellationToken = default);
+
+    /// <summary>Turns two-factor sign-in off and discards the authenticator key and recovery codes. False if the user does not exist.</summary>
+    Task<bool> ResetTwoFactorAsync(string userId, CancellationToken cancellationToken = default);
 }
 
 /// <param name="SharedKey">Base32 key to type into an authenticator app.</param>
