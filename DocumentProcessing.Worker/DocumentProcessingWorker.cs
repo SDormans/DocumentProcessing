@@ -32,8 +32,15 @@ public class DocumentProcessingWorker : BackgroundService
         var inFlight = new HashSet<Task>();
         var nextPurgeUtc = DateTime.UtcNow;
         var nextRetentionPurgeUtc = DateTime.UtcNow;
+        var nextQueueDepthUtc = DateTime.UtcNow;
         while (!stoppingToken.IsCancellationRequested)
         {
+            if (DateTime.UtcNow >= nextQueueDepthUtc)
+            {
+                nextQueueDepthUtc = DateTime.UtcNow + QueueDepthInterval;
+                await MeasureQueueDepthAsync(stoppingToken);
+            }
+
             if (DateTime.UtcNow >= nextPurgeUtc)
             {
                 nextPurgeUtc = DateTime.UtcNow + _options.PurgeInterval;
@@ -100,6 +107,22 @@ public class DocumentProcessingWorker : BackgroundService
             _logger.LogError(ex, "Purging documents past their retention period failed.");
         }
         return interval;
+    }
+
+    private static readonly TimeSpan QueueDepthInterval = TimeSpan.FromSeconds(30);
+
+    internal async Task MeasureQueueDepthAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IQueueCommandRepository>();
+            PipelineTelemetry.RecordQueueDepth(await repository.CountActiveAsync(stoppingToken));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Measuring the queue depth failed.");
+        }
     }
 
     internal async Task PurgeCompletedCommandsAsync(CancellationToken stoppingToken)

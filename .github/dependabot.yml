@@ -14,6 +14,18 @@ updates:
       test:
         patterns: ["xunit*", "Moq", "FluentAssertions", "coverlet*", "Testcontainers*", "Microsoft.NET.Test.Sdk"]
     ignore:
+      # The projects target .NET 10; .NET 11 packages are adopted together with the SDK, runtime images and
+      # TargetFramework in one change. Remove these when the projects move to .NET 11.
+      - dependency-name: "Microsoft.AspNetCore*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.EntityFrameworkCore*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.Extensions*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "System.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Npgsql*"
+        update-types: ["version-update:semver-major"]
       # Swashbuckle 11 needs Microsoft.OpenApi 3.x, but Microsoft.AspNetCore.OpenApi on .NET 10 pins Microsoft.OpenApi < 3 (NU1107).
       # Remove this when the projects move to .NET 11.
       - dependency-name: "Swashbuckle.AspNetCore*"
@@ -34,6 +46,10 @@ updates:
     directories: ["/DocumentProcessing.Api", "/DocumentProcessing.Worker", "/DocumentProcessing.Web", "/"]
     schedule:
       interval: weekly
+    ignore:
+      # A .NET 11 runtime image cannot start the .NET 10 app (see the closed PRs #34 and #40).
+      - dependency-name: "dotnet/*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:

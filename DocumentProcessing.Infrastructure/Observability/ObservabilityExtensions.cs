@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
+using Azure.Monitor.OpenTelemetry.Exporter;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -17,6 +18,9 @@ public static class ObservabilityExtensions
 {
     /// <summary>Standard OpenTelemetry variable; when unset, telemetry is collected but not exported.</summary>
     public const string OtlpEndpointKey = "OTEL_EXPORTER_OTLP_ENDPOINT";
+
+    /// <summary>Standard Application Insights variable; when set, telemetry is also sent to Azure Monitor.</summary>
+    public const string ApplicationInsightsKey = "APPLICATIONINSIGHTS_CONNECTION_STRING";
 
     public const string ConsoleFormatterKey = "Logging:Console:FormatterName";
 
@@ -30,7 +34,8 @@ public static class ObservabilityExtensions
 
     /// <summary>
     /// Structured console logging (JSON outside Development unless <c>Logging:Console:FormatterName</c> says
-    /// otherwise) with trace/span ids, plus OpenTelemetry traces, metrics and logs exported over OTLP.
+    /// otherwise) with trace/span ids, plus OpenTelemetry traces, metrics and logs exported over OTLP and/or to
+    /// Application Insights.
     /// </summary>
     public static IHostApplicationBuilder AddObservability(
         this IHostApplicationBuilder builder,
@@ -86,6 +91,8 @@ public static class ObservabilityExtensions
 
         if (!string.IsNullOrWhiteSpace(builder.Configuration[OtlpEndpointKey]))
             openTelemetry.UseOtlpExporter();
+        if (!string.IsNullOrWhiteSpace(builder.Configuration[ApplicationInsightsKey]))
+            openTelemetry.UseAzureMonitorExporter(options => options.ConnectionString = builder.Configuration[ApplicationInsightsKey]);
 
         return builder;
     }

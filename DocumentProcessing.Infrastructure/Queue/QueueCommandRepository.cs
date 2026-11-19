@@ -53,6 +53,10 @@ public class QueueCommandRepository : IQueueCommandRepository
             .Where(c => c.Status == QueueCommandStatus.Completed && c.CompletedAtUtc < completedBeforeUtc)
             .ExecuteDeleteAsync(cancellationToken);
 
+    public Task<int> CountActiveAsync(CancellationToken cancellationToken = default) =>
+        _dbContext.QueueCommands
+            .CountAsync(c => c.Status == QueueCommandStatus.Pending || c.Status == QueueCommandStatus.Processing, cancellationToken);
+
     public async Task AddAsync(QueueCommand command, CancellationToken cancellationToken = default)
     {
         await _dbContext.QueueCommands.AddAsync(command, cancellationToken);

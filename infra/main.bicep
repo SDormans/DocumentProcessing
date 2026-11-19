@@ -63,6 +63,9 @@ param requireAdminMfa bool = false
 @description('Email for alerts. Empty skips the action group and alert rules.')
 param alertEmail string = ''
 
+@description('Alert when more queue commands than this are pending or in progress.')
+param queueDepthAlertThreshold int = 100
+
 var suffix = uniqueString(resourceGroup().id)
 var storageName = take('dp${suffix}', 24)
 var dbName = 'documentprocessing'
@@ -78,6 +81,18 @@ resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   properties: {
     sku: { name: 'PerGB2018' }
     retentionInDays: 30
+  }
+}
+
+// Workspace-based, so OpenTelemetry metrics land in the same workspace as AppMetrics/AppTraces/AppRequests.
+resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: '${namePrefix}-insights'
+  location: location
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logs.id
+    IngestionMode: 'LogAnalytics'
   }
 }
 
@@ -251,6 +266,7 @@ var aiEnv = [
 ]
 var commonEnv = concat(aiEnv, [
   { name: 'ConnectionStrings__DefaultConnection', secretRef: 'db' }
+  { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', secretRef: 'appinsights' }
   { name: 'FileStorage__Provider', value: 'AzureBlob' }
   { name: 'FileStorage__AzureBlob__ServiceUri', value: storage.properties.primaryEndpoints.blob }
   { name: 'FileStorage__AzureBlob__ManagedIdentityClientId', value: identity.properties.clientId }
@@ -260,6 +276,7 @@ var commonEnv = concat(aiEnv, [
 // Container Apps rejects empty secret values. infra/deploy.sh refuses to deploy OpenAI/Anthropic without a key.
 var commonSecrets = concat(registrySecrets, [
   { name: 'db', value: connectionString }
+  { name: 'appinsights', value: appInsights.properties.ConnectionString }
   { name: 'ai-cloud-key', value: empty(aiCloudApiKey) ? 'unset' : aiCloudApiKey }
 ])
 
@@ -447,6 +464,11 @@ var alertQueries = [
     description: 'Container restarts (crash loops, failed probes) in the last 15 minutes'
     query: 'ContainerAppSystemLogs_CL | where ContainerAppName_s startswith "${namePrefix}-" | where Reason_s in ("ContainerTerminated", "ProbeFailed", "BackOff")'
   }
+  {
+    name: 'queue-backlog'
+    description: 'More than ${queueDepthAlertThreshold} documents waiting or in progress'
+    query: 'AppMetrics | where Name == "documentprocessing.queue.depth" | where Sum / ItemCount > ${queueDepthAlertThreshold}'
+  }
 ]
 
 resource alerts 'Microsoft.Insights/scheduledQueryRules@2023-03-15-preview' = [for a in alertQueries: if (!empty(alertEmail)) {
@@ -474,6 +496,71 @@ resource alerts 'Microsoft.Insights/scheduledQueryRules@2023-03-15-preview' = [f
   }
 }]
 
+// Operations dashboard (Azure Monitor workbook) over the OpenTelemetry metrics in the workspace.
+var dashboardQueries = [
+  {
+    title: 'Queue depth (commands pending or in progress)'
+    query: 'AppMetrics | where Name == "documentprocessing.queue.depth" | summarize Depth = max(Max) by bin(TimeGenerated, 5m)'
+    visualization: 'timechart'
+  }
+  {
+    title: 'Queue commands by outcome'
+    query: 'AppMetrics | where Name == "documentprocessing.pipeline.commands" | extend Outcome = tostring(Properties.outcome) | summarize Commands = sum(Sum) by Outcome, bin(TimeGenerated, 1h)'
+    visualization: 'barchart'
+  }
+  {
+    title: 'AI cost per hour (configured prices)'
+    query: 'AppMetrics | where Name == "ai.cost" | summarize Cost = sum(Sum) by bin(TimeGenerated, 1h)'
+    visualization: 'timechart'
+  }
+  {
+    title: 'AI tokens per day'
+    query: 'AppMetrics | where Name in ("ai.tokens.input", "ai.tokens.output") | summarize Tokens = sum(Sum) by Name, bin(TimeGenerated, 1d)'
+    visualization: 'barchart'
+  }
+  {
+    title: 'AI request duration p95 (seconds)'
+    query: 'AppMetrics | where Name == "ai.request.duration" | summarize P95 = max(Max) by bin(TimeGenerated, 1h)'
+    visualization: 'timechart'
+  }
+  {
+    title: 'API and worker errors'
+    query: 'AppTraces | where SeverityLevel >= 3 | summarize Errors = count() by AppRoleName, bin(TimeGenerated, 1h)'
+    visualization: 'timechart'
+  }
+]
+
+var dashboardItems = [for (q, i) in dashboardQueries: {
+  type: 3
+  name: 'query-${i}'
+  content: {
+    version: 'KqlItem/1.0'
+    title: q.title
+    query: q.query
+    size: 0
+    timeContext: { durationMs: 86400000 }
+    queryType: 0
+    resourceType: 'microsoft.operationalinsights/workspaces'
+    visualization: q.visualization
+  }
+}]
+
+resource dashboard 'Microsoft.Insights/workbooks@2023-06-01' = {
+  name: guid(resourceGroup().id, namePrefix, 'operations-dashboard')
+  location: location
+  kind: 'shared'
+  properties: {
+    displayName: '${namePrefix} operations'
+    category: 'workbook'
+    sourceId: logs.id
+    serializedData: string({
+      version: 'Notebook/1.0'
+      fallbackResourceIds: [logs.id]
+      items: dashboardItems
+    })
+  }
+}
+
 output webUrl string = 'https://${web.properties.configuration.ingress.fqdn}'
 output apiApp string = api.name
 output workerApp string = worker.name
@@ -481,3 +568,5 @@ output webApp string = web.name
 output dbInitJob string = dbInit.name
 output postgresHost string = postgres.properties.fullyQualifiedDomainName
 output storageAccount string = storage.name
+output appInsightsName string = appInsights.name
+output dashboardId string = dashboard.id
