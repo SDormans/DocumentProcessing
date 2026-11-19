@@ -13,6 +13,9 @@
 | Document stays `Queued` | Worker not running (`docker compose logs worker`), or a different `FileStorage` setting from the API |
 | Document `NeedsReview` with empty fields | `Ai:Provider=Fake`. Configure `OpenAI` |
 | Document `Failed` with "The Local model ... could not be reached" | The local runtime is down or the model is not pulled. Check the warning under the model dropdown, run `ollama pull <model>`, or use "Switch to Cloud model and retry" |
+| Local model is "not reachable" at `http://host.docker.internal:...` | The runtime on your machine only listens on `127.0.0.1`. Start Ollama with `OLLAMA_HOST=0.0.0.0` or `llama-server` with `--host 0.0.0.0` |
+| `llamacpp` container exits with `failed to load model` | `LLAMA_MODEL_FILE` does not name a `.gguf` file in `models/`, or the file is incomplete |
+| Local documents fail with a timeout | CPU inference is slow; raise `AI_LOCAL_ATTEMPT_TIMEOUT_SECONDS` / `AI_LOCAL_TOTAL_TIMEOUT_SECONDS` or use a smaller model |
 | Startup fails with `Invalid AI configuration: ...` | The message names every wrong `Ai:*` setting; see [Configuration](Configuration.md#cloud-and-local-models) |
 | Document `Failed` | Check `QueueCommands.LastErrorCategory`. No text (scanned PDF and `tesseract`/`pdftoppm` missing from the worker's `PATH`, or OCR found nothing), or the LLM refused or returned schema-invalid output (not retried), or timeouts/5xx after `MaxAttempts` |
 | Worker logs every SQL command | Set `WORKER_SQL_LOG_LEVEL=Warning` (the Compose default); `Information` shows each queue poll |
