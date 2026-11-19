@@ -62,6 +62,64 @@ public class RequeueTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Concurrent_requeues_queue_the_document_once()
+    {
+        using var admin = _factory.CreateApiClient();
+        (await admin.LoginAsync(ApiFactory.AdminUserName, ApiFactory.AdminPassword)).EnsureSuccessStatusCode();
+        var id = await UploadAsync(admin);
+        await _factory.DrainQueueAsync();
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            (await db.Documents.SingleAsync(d => d.Id == id)).UpdateStatus(DocumentStatus.Failed);
+            await db.SaveChangesAsync();
+        }
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 4)
+            .Select(_ => admin.SendAsync(HttpMethod.Post, $"/api/documents/{id}/requeue", null)));
+
+        responses.Select(r => r.StatusCode).Should().ContainSingle(s => s == HttpStatusCode.Accepted)
+            .And.Subject.Should().OnlyContain(s => s == HttpStatusCode.Accepted || s == HttpStatusCode.Conflict);
+        using var verify = _factory.Services.CreateScope();
+        (await verify.ServiceProvider.GetRequiredService<AppDbContext>().QueueCommands
+            .CountAsync(c => c.DocumentId == id && c.Status != Domain.Enums.QueueCommandStatus.Completed)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Upload_validation_failures_return_415_for_non_pdf_files()
+    {
+        using var admin = _factory.CreateApiClient();
+        (await admin.LoginAsync(ApiFactory.AdminUserName, ApiFactory.AdminPassword)).EnsureSuccessStatusCode();
+        var file = new ByteArrayContent("just text"u8.ToArray());
+        file.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
+
+        var response = await admin.SendAsync(HttpMethod.Post, "/api/documents", new MultipartFormDataContent { { file, "file", "notes.txt" } });
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnsupportedMediaType);
+        (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("errors").GetArrayLength().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task Rejected_documents_cannot_be_requeued_or_retried()
+    {
+        using var admin = _factory.CreateApiClient();
+        (await admin.LoginAsync(ApiFactory.AdminUserName, ApiFactory.AdminPassword)).EnsureSuccessStatusCode();
+        var id = await UploadAsync(admin);
+        await _factory.DrainQueueAsync();
+
+        (await admin.SendAsync(HttpMethod.Post, $"/api/documents/{id}/review/reject", JsonContent.Create(new { reason = "Not an invoice" })))
+            .EnsureSuccessStatusCode();
+
+        var detail = await admin.Http.GetFromJsonAsync<JsonElement>($"/api/documents/{id}/review");
+        detail.GetProperty("status").GetString().Should().Be("Rejected");
+        detail.GetProperty("failureReason").ValueKind.Should().Be(JsonValueKind.Null);
+        (await admin.SendAsync(HttpMethod.Post, $"/api/documents/{id}/requeue", null))
+            .StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await admin.SendAsync(HttpMethod.Post, $"/api/documents/{id}/retry-with-model", JsonContent.Create(new { modelType = "Cloud" })))
+            .StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
     public async Task Completed_queue_commands_older_than_the_retention_are_purged()
     {
         using var admin = _factory.CreateApiClient();

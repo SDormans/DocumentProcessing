@@ -5,13 +5,13 @@
 | Control | Details |
 |---|---|
 | Identity | ASP.NET Core Identity in PostgreSQL. Hashed passwords, 12-character minimum, 15-minute lockout after 5 failed logins. No default accounts |
-| Session | Cookie `DocumentProcessing.Auth`: HttpOnly, SameSite=Lax, Secure outside Development |
+| Session | Cookie `DocumentProcessing.Auth`: HttpOnly, SameSite=Lax, Secure outside Development (`Authentication:CookieSecurePolicy`) |
 | Authorization | Policies `CanReviewDocuments`, `CanApproveReject`, `IsAdmin`, plus per-document ownership (`Documents.OwnerId`) |
 | Not-found over forbidden | An inaccessible document returns `404`, so its existence isn't revealed |
-| CSRF | Double-submit anti-forgery token (`XSRF-TOKEN` cookie → `X-XSRF-TOKEN` header) on every unsafe method except login/logout |
+| CSRF | Double-submit anti-forgery token (`XSRF-TOKEN` cookie → `X-XSRF-TOKEN` header) on every unsafe method except login |
 | Rate limiting | Login 5/min per IP, upload 20/min per user, `429` + `Retry-After` |
 | Upload checks | Size, extension, MIME, `%PDF-` signature. Generated storage keys; path traversal rejected |
-| Network | No CORS (same-origin proxy). Compose binds ports to loopback. Swagger in Development only |
+| Network | No CORS (same-origin proxy). Compose binds ports to loopback and runs in Production (`ASPNETCORE_ENVIRONMENT`). Swagger in Development only. Nginx sends CSP, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, and HSTS over HTTPS. The API trusts forwarded headers only from `ForwardedHeaders:*` proxies |
 | Secrets | From `.env` / environment / Container Apps secrets. CD signs in to Azure with OIDC (no stored Azure secret) |
 | Data access | API and worker use a non-superuser database role |
 

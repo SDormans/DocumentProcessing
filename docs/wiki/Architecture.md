@@ -54,7 +54,9 @@ Browser ───────► │ web  (Nginx: React SPA, proxies /api, /heal
 ### Document lifecycle
 
 ```text
-Uploaded ─► Queued ─► Processing ─► NeedsReview ─► Completed (review Approved / Rejected)
+Uploaded ─► Queued ─► Processing ─► NeedsReview ─► Completed (review Approved)
+                                               └─► Rejected  (review Rejected; final, cannot be re-queued)
+                          Processing ─► Failed ─► Queued (re-queue / retry with another model)
                           │
                           └──► Failed (after MaxAttempts, or a non-retryable error)
 ```

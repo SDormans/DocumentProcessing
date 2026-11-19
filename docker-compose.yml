@@ -26,8 +26,12 @@ services:
       context: .
       dockerfile: DocumentProcessing.Api/Dockerfile
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       ASPNETCORE_URLS: http://+:8080
+      # Behind the web container's Nginx on a private Docker network; HTTPS ends at Nginx or an ingress.
+      ForwardedHeaders__KnownNetworks__0: ${FORWARDED_HEADERS_KNOWN_NETWORK:-172.16.0.0/12}
+      # Secure cookies whenever the client connection is HTTPS (X-Forwarded-Proto from Nginx); plain HTTP on localhost still works.
+      Authentication__CookieSecurePolicy: ${COOKIE_SECURE_POLICY:-SameAsRequest}
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-documentprocessing};Username=${APP_DB_USER:-documentprocessing_app};Password=${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
       FileStorage__BasePath: /app/data/storage
       FileStorage__Provider: ${FILE_STORAGE_PROVIDER:-Local}
@@ -73,7 +77,7 @@ services:
       context: .
       dockerfile: DocumentProcessing.Worker/Dockerfile
     environment:
-      DOTNET_ENVIRONMENT: Development
+      DOTNET_ENVIRONMENT: ${DOTNET_ENVIRONMENT:-Production}
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-documentprocessing};Username=${APP_DB_USER:-documentprocessing_app};Password=${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
       FileStorage__BasePath: /app/data/storage
       FileStorage__Provider: ${FILE_STORAGE_PROVIDER:-Local}

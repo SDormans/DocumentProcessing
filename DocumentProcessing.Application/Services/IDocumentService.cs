@@ -1,3 +1,4 @@
+using DocumentProcessing.Domain.Interfaces;
 using DocumentProcessing.Application.DTOs;
 
 namespace DocumentProcessing.Application.Services;
@@ -12,7 +13,7 @@ public interface IDocumentService
 
     Task<DocumentDto?> GetDocumentAsync(Guid id, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<DocumentDto>> GetDocumentsAsync(CancellationToken cancellationToken = default);
+    Task<PagedResult<DocumentDto>> GetDocumentsAsync(int skip = 0, int take = DocumentService.DefaultPageSize, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Puts a failed document back on the processing queue.

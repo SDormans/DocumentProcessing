@@ -1,4 +1,4 @@
-using System.Security.Claims;
+using DocumentProcessing.Application.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 
 namespace DocumentProcessing.Api.Extensions;
@@ -7,16 +7,30 @@ public static class AuthSetup
 {
     public const string CookieName = "DocumentProcessing.Auth";
 
-    public static IServiceCollection AddCookieAuthentication(this IServiceCollection services, IHostEnvironment environment)
+    /// <summary>
+    /// Secure policy for the auth and antiforgery cookies: <c>Authentication:CookieSecurePolicy</c>
+    /// (<c>Always</c>, <c>SameAsRequest</c> or <c>None</c>); defaults to <c>None</c> in Development, else <c>Always</c>.
+    /// </summary>
+    public static CookieSecurePolicy GetCookieSecurePolicy(IConfiguration configuration, IHostEnvironment environment)
     {
+        var configured = configuration["Authentication:CookieSecurePolicy"];
+        if (string.IsNullOrWhiteSpace(configured))
+            return environment.IsDevelopment() ? CookieSecurePolicy.None : CookieSecurePolicy.Always;
+        if (Enum.TryParse<CookieSecurePolicy>(configured, ignoreCase: true, out var policy) && Enum.IsDefined(policy))
+            return policy;
+        throw new InvalidOperationException(
+            $"Authentication:CookieSecurePolicy '{configured}' is invalid. Use Always, SameAsRequest or None.");
+    }
+
+    public static IServiceCollection AddCookieAuthentication(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
+    {
+        var securePolicy = GetCookieSecurePolicy(configuration, environment);
         services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
             .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
             {
                 options.Cookie.Name = CookieName;
                 options.Cookie.HttpOnly = true;
-                options.Cookie.SecurePolicy = environment.IsDevelopment()
-                    ? CookieSecurePolicy.None
-                    : CookieSecurePolicy.Always;
+                options.Cookie.SecurePolicy = securePolicy;
                 options.Cookie.SameSite = SameSiteMode.Lax;
                 options.ExpireTimeSpan = TimeSpan.FromHours(8);
                 options.SlidingExpiration = true;
@@ -45,11 +59,7 @@ public static class AuthSetup
                 policy.RequireAuthenticatedUser());
             options.AddPolicy("CanApproveReject", policy =>
                 policy.RequireAuthenticatedUser()
-                    .RequireAssertion(context =>
-                    {
-                        var role = context.User.FindFirst(ClaimTypes.Role)?.Value;
-                        return role == "Admin" || role == "Reviewer";
-                    }));
+                    .RequireRole(ReviewRoles.CanApproveOrReject));
             options.AddPolicy("IsAdmin", policy =>
                 policy.RequireAuthenticatedUser()
                     .RequireRole("Admin"));

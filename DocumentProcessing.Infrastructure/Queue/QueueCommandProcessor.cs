@@ -24,7 +24,12 @@ public enum QueueCommandOutcome
 /// validation (via <see cref="IInvoiceExtractor"/>), then persists the result, the document status
 /// and the command completion in a single transaction.
 /// </summary>
-public class QueueCommandProcessor
+public interface IQueueCommandProcessor
+{
+    Task<QueueCommandOutcome> ProcessAsync(Guid commandId, string leaseOwner, CancellationToken cancellationToken);
+}
+
+public class QueueCommandProcessor : IQueueCommandProcessor
 {
     private const int MaxErrorLength = 2000;
     private const int MaxErrorCategoryLength = 100;
@@ -33,13 +38,16 @@ public class QueueCommandProcessor
     private readonly IInvoiceExtractor _invoiceExtractor;
     private readonly QueueProcessingOptions _options;
     private readonly ILogger<QueueCommandProcessor> _logger;
+    private readonly IQueueLeaseRenewer? _leaseRenewer;
 
     public QueueCommandProcessor(
         AppDbContext dbContext,
         IInvoiceExtractor invoiceExtractor,
         IOptions<QueueProcessingOptions> options,
-        ILogger<QueueCommandProcessor> logger)
+        ILogger<QueueCommandProcessor> logger,
+        IQueueLeaseRenewer? leaseRenewer = null)
     {
+        _leaseRenewer = leaseRenewer;
         _dbContext = dbContext;
         _invoiceExtractor = invoiceExtractor;
         _options = options.Value;
@@ -97,7 +105,7 @@ public class QueueCommandProcessor
         }
 
         // Idempotency: a redelivered command for an already-extracted document is a no-op.
-        if (document.Status is DocumentStatus.NeedsReview or DocumentStatus.Completed)
+        if (document.Status is DocumentStatus.NeedsReview or DocumentStatus.Completed or DocumentStatus.Rejected)
         {
             _logger.LogInformation("Document {DocumentId} already processed ({Status}); completing command.", document.Id, document.Status);
             command.MarkCompleted();
@@ -126,9 +134,17 @@ public class QueueCommandProcessor
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         InvoiceExtractionResult result;
+        using var leaseLost = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var stopHeartbeat = new CancellationTokenSource();
+        var heartbeat = KeepLeaseAliveAsync(command, leaseLost, stopHeartbeat.Token);
         try
         {
-            result = await _invoiceExtractor.ImproveAsync(document.Id, cancellationToken);
+            result = await _invoiceExtractor.ImproveAsync(document.Id, leaseLost.Token);
+        }
+        catch (Exception) when (leaseLost.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning("Lease on queue command {QueueCommandId} was lost during extraction; discarding this attempt.", command.Id);
+            return QueueCommandOutcome.LeaseLost;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -149,6 +165,11 @@ public class QueueCommandProcessor
         {
             return await HandleTransientFailureAsync(command, document, ex, cancellationToken);
         }
+        finally
+        {
+            await stopHeartbeat.CancelAsync();
+            await heartbeat;
+        }
 
         await AddResultAsync(document.Id, result, cancellationToken);
 
@@ -164,6 +185,38 @@ public class QueueCommandProcessor
         await _dbContext.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Document {DocumentId} extracted and ready for review.", document.Id);
         return QueueCommandOutcome.Completed;
+    }
+
+    /// <summary>
+    /// Extends the lease while extraction runs, so slow OCR or AI calls do not let another worker reclaim the
+    /// command. Cancels <paramref name="leaseLost"/> when another worker took the lease over.
+    /// </summary>
+    private async Task KeepLeaseAliveAsync(QueueCommand command, CancellationTokenSource leaseLost, CancellationToken stop)
+    {
+        if (_leaseRenewer is null || command.LeaseOwner is not { } owner)
+            return;
+
+        using var timer = new PeriodicTimer(_options.EffectiveLeaseRenewalInterval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(stop))
+            {
+                try
+                {
+                    if (await _leaseRenewer.RenewAsync(command.Id, owner, _options.LeaseDuration, stop))
+                        continue;
+                    await leaseLost.CancelAsync();
+                    return;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogWarning(ex, "Renewing the lease on queue command {QueueCommandId} failed; retrying.", command.Id);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (stop.IsCancellationRequested)
+        {
+        }
     }
 
     private async Task<QueueCommandOutcome> HandleTransientFailureAsync(

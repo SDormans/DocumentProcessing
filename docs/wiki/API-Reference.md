@@ -1,6 +1,6 @@
 # API Reference
 
-All endpoints are under the same origin as the web app (`/api/...`). Authentication is a cookie (`DocumentProcessing.Auth`). Every `POST`/`PUT`/`PATCH`/`DELETE`, except login and logout, needs the anti-forgery header `X-XSRF-TOKEN` set to the value of the `XSRF-TOKEN` cookie. That cookie is issued by login and by `GET /api/auth/me`.
+All endpoints are under the same origin as the web app (`/api/...`). Authentication is a cookie (`DocumentProcessing.Auth`). Every `POST`/`PUT`/`PATCH`/`DELETE`, except login, needs the anti-forgery header `X-XSRF-TOKEN` set to the value of the `XSRF-TOKEN` cookie. That cookie is issued by login and by `GET /api/auth/me`.
 
 In Development, Swagger UI is available at `/swagger`.
 
@@ -9,7 +9,7 @@ In Development, Swagger UI is available at `/swagger`.
 | Method | Path | Access | Body / notes |
 |---|---|---|---|
 | POST | `/api/auth/login` | Anonymous; 5/min per IP | `{ "username", "password" }` → sets cookies |
-| POST | `/api/auth/logout` | Anonymous | Clears the cookie |
+| POST | `/api/auth/logout` | Anonymous; anti-forgery header | Clears the cookie |
 | GET | `/api/auth/me` | Signed in | Current user and roles; refreshes `XSRF-TOKEN` |
 | POST | `/api/auth/register` | `IsAdmin` | `{ "username", "password", "email", "role" }` (`role`: `Admin` or `Reviewer`) |
 
@@ -17,10 +17,10 @@ In Development, Swagger UI is available at `/swagger`.
 
 | Method | Path | Access | Notes |
 |---|---|---|---|
-| POST | `/api/documents` | Signed in; 20/min per user | `multipart/form-data`, field `file`. `201`, `400` validation, `413` too large |
-| GET | `/api/documents` | Signed in | Own documents; all for unrestricted roles |
+| POST | `/api/documents` | Signed in; 20/min per user | `multipart/form-data`, field `file`. `201`, `400` validation, `413` too large, `415` not a PDF |
+| GET | `/api/documents?skip=0&take=50` | Signed in | Own documents, newest first; all for unrestricted roles. `take` 1–200; total in `X-Total-Count` |
 | GET | `/api/documents/{id}` | Signed in, owner | `404` if missing **or not yours** |
-| POST | `/api/documents/{id}/requeue` | `IsAdmin` | Re-queues a `Failed` document. `202`, `404` missing, `409` not failed |
+| POST | `/api/documents/{id}/requeue` | `IsAdmin` | Re-queues a `Failed` document. `202`, `404` missing, `409` not failed (including `Rejected`) or already re-queued by a concurrent request |
 | GET | `/api/documents/{id}/content` | Signed in, owner | The PDF |
 
 ## Review

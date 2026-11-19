@@ -1,6 +1,6 @@
 using DocumentProcessing.Application.DTOs;
 using DocumentProcessing.Application.Exceptions;
-using System.Linq;
+using DocumentProcessing.Domain.Exceptions;
 using System.Net;
 using System.Text.Json;
 
@@ -35,7 +35,7 @@ public class ErrorHandlingMiddleware
         var response = new ErrorResponse
         {
             TraceId = context.TraceIdentifier,
-            Message = "Er is een fout opgetreden bij het verwerken van de verzoek."
+            Message = "An error occurred while processing the request."
         };
 
         HttpStatusCode statusCode;
@@ -44,23 +44,20 @@ public class ErrorHandlingMiddleware
         {
             case ValidationException validationEx:
             {
-                statusCode = HttpStatusCode.BadRequest;
-                response.Message = "Validatiefout.";
                 response.Errors = validationEx.Errors;
-
-                var errorList = validationEx.Errors.ToList();
-                if (errorList.Any(e => e.Contains("te groot", StringComparison.OrdinalIgnoreCase)))
+                (statusCode, response.Message) = validationEx.Kind switch
                 {
-                    statusCode = HttpStatusCode.RequestEntityTooLarge; // 413
-                    response.Message = "Bestand is te groot.";
-                }
-                else if (errorList.Any(e => e.Contains("PDF", StringComparison.OrdinalIgnoreCase)))
-                {
-                    statusCode = HttpStatusCode.UnsupportedMediaType; // 415
-                    response.Message = "Niet-ondersteund bestandstype.";
-                }
+                    ValidationFailureKind.TooLarge => (HttpStatusCode.RequestEntityTooLarge, "File is too large."),
+                    ValidationFailureKind.UnsupportedMediaType => (HttpStatusCode.UnsupportedMediaType, "Unsupported file type."),
+                    _ => (HttpStatusCode.BadRequest, "Validation failed.")
+                };
                 break;
             }
+
+            case ConcurrencyConflictException:
+                statusCode = HttpStatusCode.Conflict;
+                response.Message = "The resource was changed by another request. Reload and try again.";
+                break;
 
             case NotFoundException notFoundEx:
                 statusCode = HttpStatusCode.NotFound;

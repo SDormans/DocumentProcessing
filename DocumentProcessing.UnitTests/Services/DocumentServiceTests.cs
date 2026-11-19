@@ -77,13 +77,15 @@ public class DocumentServiceTests
         // Ensure different timestamps for ordering assertion
         documents[0].UpdateStatus(DocumentStatus.Uploaded); // touch to ensure CreatedAtUtc stays
         documents[1].UpdateStatus(DocumentStatus.Uploaded);
-        _mockRepository.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(documents as IReadOnlyList<Document>);
+        _mockRepository.Setup(r => r.GetPageAsync(It.IsAny<string?>(), 0, DocumentService.MaxPageSize, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PagedResult<Document>(documents, 2));
 
-        // Act
-        var result = await _service.GetDocumentsAsync(CancellationToken.None);
+        // Act: an oversized page is clamped to the maximum.
+        var page = await _service.GetDocumentsAsync(-5, 10_000, CancellationToken.None);
+        var result = page.Items;
 
         // Assert
+        page.TotalCount.Should().Be(2);
         result.Should().HaveCount(2);
         // Ordering is handled by the repository (ORDER BY CreatedAtUtc DESC),
         // so we just verify count and content

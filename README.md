@@ -247,9 +247,9 @@ Implemented controls:
 
 - All document and review endpoints require an authenticated user; the upload endpoint is not anonymous.
 - Role policies guard review decisions and administrative account creation on the server.
-- Login uses a rate limit, consistent 401/403 cookie responses, HttpOnly cookies, SameSite=Lax, and Secure cookies outside Development.
+- Login uses a rate limit, consistent 401/403 cookie responses, HttpOnly cookies, SameSite=Lax, and Secure cookies outside Development (override with `Authentication:CookieSecurePolicy`). Compose runs the API and worker in Production with `SameAsRequest` (Secure cookies over HTTPS).
 - Rate limits (fixed window, `429` with `Retry-After`): login 5/min per client IP, uploads 20/min per signed-in user. Both are configurable under `RateLimiting:Login` and `RateLimiting:Upload` (`PermitLimit`, `Period`).
-- Anti-forgery tokens on every cookie-authenticated `POST`/`PUT`/`PATCH`/`DELETE` (double-submit). Signing in and `GET /api/auth/me` issue a readable `XSRF-TOKEN` cookie bound to the user. The SPA sends it back in the `X-XSRF-TOKEN` header, and requests without a valid token get `400`. Only login and logout are exempt: there is no token before signing in, and JSON-only bodies without CORS already block cross-site login posts.
+- Anti-forgery tokens on every cookie-authenticated `POST`/`PUT`/`PATCH`/`DELETE` (double-submit). Signing in and `GET /api/auth/me` issue a readable `XSRF-TOKEN` cookie bound to the user. The SPA sends it back in the `X-XSRF-TOKEN` header, and requests without a valid token get `400`. Only login is exempt: there is no token before signing in, and JSON-only bodies without CORS already block cross-site login posts.
 - Accounts use ASP.NET Core Identity: hashed passwords, a 12-character minimum length, and a 15-minute lockout after 5 failed logins. There are no default accounts; the bootstrap account must be configured explicitly.
 - The API limits PDF size, checks extension/MIME/signature, replaces user filenames with generated internal storage keys, removes path components from displayed filenames, and keeps filesystem paths out of API DTOs and routine logs.
 - Storage key path resolution rejects traversal. Storage errors return a generic client response.

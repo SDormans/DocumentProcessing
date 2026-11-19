@@ -84,9 +84,4 @@ public class QueueCommand
         LeaseOwner = null;
         LeaseExpiresAtUtc = null;
     }
-
-    public void SetNextAttempt(TimeSpan delay)
-    {
-        NextAttemptAtUtc = DateTime.UtcNow + delay;
-    }
 }

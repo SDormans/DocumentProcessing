@@ -6,9 +6,6 @@ namespace DocumentProcessing.Infrastructure.Queue;
 
 public interface IQueueCommandRepository
 {
-    Task<QueueCommand?> GetPendingAsync(Guid documentId, CancellationToken cancellationToken = default);
-    Task<List<QueueCommand>> GetReadyForProcessingAsync(CancellationToken cancellationToken = default);
-
     /// <summary>
     /// Atomically leases up to <paramref name="batchSize"/> commands that are due (Pending) or whose
     /// lease expired (Processing), incrementing their attempt count. Safe to call from many workers.

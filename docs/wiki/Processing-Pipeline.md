@@ -22,7 +22,7 @@ WHERE "Id" IN (SELECT "Id" FROM "QueueCommands"
 RETURNING *;
 ```
 
-Commands whose lease has expired, for example after a worker crash, are claimed again. Claimed commands are processed in parallel (`Parallel.ForEachAsync`).
+Commands whose lease has expired, for example after a worker crash, are claimed again. Up to `BatchSize` commands run at once; as soon as one finishes the worker claims another, so one slow scan doesn't hold up the rest. While a command runs, the worker renews its lease every `LeaseRenewalInterval` (default a third of `LeaseDuration`); if the renewal finds the lease taken by another worker, extraction is cancelled and the attempt discarded.
 
 ## 3. Extract (worker, `QueueCommandProcessor` → `InvoiceExtractor`)
 
@@ -57,7 +57,7 @@ Each finding is an `Error` or a `Warning`.
 In one transaction: the `InvoiceExtractionResult`, `Document.Status = NeedsReview` and `QueueCommand.Status = Completed`.
 
 - **Fencing**: `LeaseOwner` is a concurrency token. A worker that lost its lease gets a concurrency error and discards its result.
-- **Idempotency**: a redelivered command for a document already in `NeedsReview`/`Completed` is completed without calling the LLM again.
+- **Idempotency**: a redelivered command for a document already in `NeedsReview`/`Completed`/`Rejected` is completed without calling the LLM again.
 - **Retries**: transient errors (timeouts, HTTP 5xx) back off exponentially (`BaseRetryDelay × 2^(attempt-1)`) up to `MaxAttempts` (3). Deterministic failures (no text, refused or schema-invalid output) fail immediately. On final failure both the command and the document go to `Failed`, with `LastErrorCategory` set.
 
 ## 5. Review (API + web)

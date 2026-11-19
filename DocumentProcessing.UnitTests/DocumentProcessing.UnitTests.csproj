@@ -25,6 +25,7 @@
     <ProjectReference Include="..\DocumentProcessing.Application\DocumentProcessing.Application.csproj" />
     <ProjectReference Include="..\DocumentProcessing.Domain\DocumentProcessing.Domain.csproj" />
     <ProjectReference Include="..\DocumentProcessing.Infrastructure\DocumentProcessing.Infrastructure.csproj" />
+    <ProjectReference Include="..\DocumentProcessing.Worker\DocumentProcessing.Worker.csproj" />
   </ItemGroup>
 
   <ItemGroup>

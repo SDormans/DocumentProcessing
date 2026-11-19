@@ -19,6 +19,7 @@ public class DocumentReviewServiceTests
     private readonly Mock<IInvoiceResultRepository> _results = new();
     private readonly Document _document = new(Guid.NewGuid(), "invoice.pdf", "application/pdf", 10, "hash", "key", DocumentStatus.NeedsReview, DateTime.UtcNow);
     private DocumentReview? _added;
+    private readonly TestCurrentUser _currentUser = new("user-1", unrestricted: true);
 
     public DocumentReviewServiceTests()
     {
@@ -38,7 +39,7 @@ public class DocumentReviewServiceTests
         _results.Object,
         new ValidationService(Array.Empty<IInvoiceValidationRule>()),
         NullLogger<DocumentReviewService>.Instance,
-        Mock.Of<ICurrentUser>(u => u.HasUnrestrictedDocumentAccess));
+        _currentUser);
 
     [Fact]
     public async Task Detail_ShowsStoredExtractionWarnings_ButNotStaleValidationCopies()
@@ -61,6 +62,19 @@ public class DocumentReviewServiceTests
             Severity = "Warning",
             Message = truncation
         });
+    }
+
+    [Fact]
+    public async Task ApproveAndReject_RequireAnApproverRole()
+    {
+        _currentUser.Roles = ["Viewer"];
+
+        (await Service.ApproveAsync(_document.Id, new ApproveRequest(), "user-1", "viewer")).Error.Should().Be(ReviewActionError.Forbidden);
+        (await Service.RejectAsync(_document.Id, new RejectRequest { Reason = "No" }, "user-1", "viewer")).Error.Should().Be(ReviewActionError.Forbidden);
+        _document.Status.Should().Be(DocumentStatus.NeedsReview);
+
+        _currentUser.Roles = ["Viewer", "Reviewer"];
+        (await Service.ApproveAsync(_document.Id, new ApproveRequest(), "user-1", "reviewer")).Success.Should().BeTrue();
     }
 
     [Fact]
@@ -173,7 +187,7 @@ public class DocumentReviewServiceTests
         _results.Object,
         new ValidationService(rules),
         NullLogger<DocumentReviewService>.Instance,
-        Mock.Of<ICurrentUser>(u => u.HasUnrestrictedDocumentAccess));
+        _currentUser);
 
     [Fact]
     public async Task Reject_WithoutPriorCorrections_CreatesReview()
@@ -182,13 +196,14 @@ public class DocumentReviewServiceTests
 
         response.Success.Should().BeTrue();
         _added!.Status.Should().Be(ReviewStatus.Rejected);
-        _document.Status.Should().Be(DocumentStatus.Failed);
+        _document.Status.Should().Be(DocumentStatus.Rejected);
     }
 
     [Theory]
     [InlineData(DocumentStatus.Queued)]
     [InlineData(DocumentStatus.Processing)]
     [InlineData(DocumentStatus.Failed)]
+    [InlineData(DocumentStatus.Rejected)]
     [InlineData(DocumentStatus.Completed)]
     public async Task Decisions_OnDocumentNotAwaitingReview_AreRefusedWithoutSaving(DocumentStatus status)
     {

@@ -16,20 +16,6 @@ public class QueueCommandRepository : IQueueCommandRepository
         _dbContext = dbContext;
     }
 
-    public async Task<QueueCommand?> GetPendingAsync(Guid documentId, CancellationToken cancellationToken = default)
-    {
-        return await _dbContext.QueueCommands
-            .FirstOrDefaultAsync(qc => qc.DocumentId == documentId && qc.Status == QueueCommandStatus.Pending, cancellationToken);
-    }
-
-    public async Task<List<QueueCommand>> GetReadyForProcessingAsync(CancellationToken cancellationToken = default)
-    {
-        return await _dbContext.QueueCommands
-            .Where(qc => qc.Status == QueueCommandStatus.Pending && qc.NextAttemptAtUtc <= DateTime.UtcNow)
-            .Take(8) // Max parallelism
-            .ToListAsync(cancellationToken);
-    }
-
     public async Task<IReadOnlyList<QueueCommand>> ClaimAsync(
         string leaseOwner,
         TimeSpan leaseDuration,

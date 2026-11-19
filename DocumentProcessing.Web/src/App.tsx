@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { DocumentList } from './components/DocumentList';
 import { DocumentDetail } from './components/DocumentDetail';
 import { AiModelSelector } from './components/AiModelSelector';
+import { xsrfHeaders } from './csrf';
 
 const App: React.FC = () => {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
@@ -51,6 +52,7 @@ const App: React.FC = () => {
       const response = await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'same-origin',
+        headers: xsrfHeaders(),
       });
       if (!response.ok) throw new Error('Sign-out failed. Try again.');
       setAuthenticated(false);

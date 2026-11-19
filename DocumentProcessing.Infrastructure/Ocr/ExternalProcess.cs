@@ -28,17 +28,20 @@ internal static class ExternalProcess
         catch (OperationCanceledException)
         {
             try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+            // Observe the readers so their cancellation is not left as an unobserved task exception.
+            try { await Task.WhenAll(stdout, stderr); } catch (Exception) { }
             cancellationToken.ThrowIfCancellationRequested();
             throw new TimeoutException($"{Path.GetFileName(fileName)} did not finish within {timeout}.");
         }
 
+        var output = await stdout;
+        var error = (await stderr).Trim();
         if (process.ExitCode != 0)
         {
-            var error = (await stderr).Trim();
             throw new InvalidOperationException(
                 $"{Path.GetFileName(fileName)} exited with code {process.ExitCode}: {(error.Length > 300 ? error[..300] : error)}");
         }
-        return await stdout;
+        return output;
     }
 
     public static bool IsOnPath(string fileName)
