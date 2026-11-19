@@ -18,6 +18,7 @@ Standard ASP.NET Core configuration: `appsettings*.json`, then environment varia
 | `ForwardedHeaders:KnownProxies` / `KnownNetworks` | loopback only | IPs / CIDR ranges whose `X-Forwarded-For`/`-Proto` are trusted. Compose trusts `FORWARDED_HEADERS_KNOWN_NETWORK` (default `172.16.0.0/12`, Docker's bridge range); set the ingress range on Azure |
 | `Logging:Console:FormatterName` | `json` outside Development | `json` or `simple` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | (unset = no export) | Plus the standard `OTEL_*` variables |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | (unset = no export) | Sends traces, metrics and logs to Application Insights |
 
 ## API
 
@@ -111,6 +112,7 @@ Older configuration with flat keys (`Ai:Provider`, `Ai:Endpoint`, `Ai:ApiKey`, `
 | `FILE_STORAGE_PROVIDER`, `AZURE_BLOB_*` | `FileStorage:*` |
 | `LOG_FORMAT` | `Logging:Console:FormatterName` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP export |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Application Insights export (set by the Bicep template) |
 
 ### Example: Azure OpenAI
 

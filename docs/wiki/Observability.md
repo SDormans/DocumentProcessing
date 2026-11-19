@@ -9,7 +9,7 @@ The API and worker share one setup: `DocumentProcessing.Infrastructure/Observabi
 
 ## Traces
 
-Exported over OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Services: `documentprocessing-api`, `documentprocessing-worker`.
+Exported over OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, and to Application Insights when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set (both may be set). Services: `documentprocessing-api`, `documentprocessing-worker`. The Azure template sets the Application Insights connection string and creates an operations workbook (`<prefix> operations`) with queue depth, command outcomes, AI cost, tokens, AI latency and errors, plus a queue-backlog alert.
 
 ```text
 ProcessQueueCommand
@@ -27,6 +27,7 @@ Plus ASP.NET Core requests (health probes excluded), outgoing HTTP and Npgsql co
 | Metric | Meaning |
 |---|---|
 | `documentprocessing.pipeline.commands` / `.duration` | Queue commands processed, by outcome |
+| `documentprocessing.queue.depth` | Queue commands pending or in progress, measured by the worker every 30 s |
 | `documentprocessing.extraction.stage.duration` | Duration per stage |
 | `documentprocessing.extraction.results` | Extraction outcomes |
 | `ai.requests`, `ai.request.duration` | LLM calls |

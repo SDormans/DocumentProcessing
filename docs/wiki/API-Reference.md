@@ -13,7 +13,12 @@ In Development, Swagger UI is available at `/swagger`.
 | GET | `/api/auth/me` | Signed in | Current user and roles; refreshes `XSRF-TOKEN` |
 | POST | `/api/auth/register` | `IsAdmin` | `{ "username", "password", "email", "role" }` (`role`: `Admin` or `Reviewer`) |
 
-Two-factor sign-in: `POST /api/auth/mfa/setup` (signed in) returns `sharedKey` and `authenticatorUri`; `POST /api/auth/mfa/enable` with `{ "code": "123456" }` returns `204` or `400`. Once enabled, `POST /api/auth/login` without `twoFactorCode` returns `401` with `requiresTwoFactor: true`.
+Two-factor sign-in: `POST /api/auth/mfa/setup` (signed in) returns `sharedKey` and `authenticatorUri`; `POST /api/auth/mfa/enable` with `{ "code": "123456" }` returns `200` with ten one-time `recoveryCodes`, or `400`. Once enabled, `POST /api/auth/login` without `twoFactorCode` or `recoveryCode` returns `401` with `requiresTwoFactor: true`.
+
+| Method | Path | Access | Notes |
+|---|---|---|---|
+| POST | `/api/auth/mfa/recovery-codes` | Signed in | Replaces your recovery codes. `200` with `recoveryCodes`, `409` if two-factor sign-in is off |
+| POST | `/api/auth/users/{userId}/mfa/reset` | `IsAdmin` | Turns two-factor sign-in off and discards the key and recovery codes (lost authenticator). `204`, `404` |
 
 ## Documents
 
@@ -23,9 +28,12 @@ Two-factor sign-in: `POST /api/auth/mfa/setup` (signed in) returns `sharedKey` a
 | GET | `/api/documents?skip=0&take=50&status=&search=` | Signed in | Own documents, newest first; all for unrestricted roles. `take` 1–200, optional `status` and `search` (file name); total in `X-Total-Count`; `400` for bad values |
 | POST | `/api/documents/{id}/reprocess` | `IsAdmin` | Re-extract a `NeedsReview` document as a new result version. `202`, `404`, `409` |
 | GET | `/api/documents/export.csv` | Signed in | Approved values of completed documents you may see, one row per document |
-| GET | `/api/documents/{id}` | Signed in, owner | `404` if missing **or not yours** |
+| GET | `/api/documents/review-queue?skip=0&take=50` | `CanApproveReject` | Unassigned `NeedsReview` documents of every owner, oldest first; total in `X-Total-Count` |
+| POST | `/api/documents/{id}/claim` | `CanApproveReject` | Assigns the document to you. `204` (also when already yours), `404`, `409` not awaiting review or claimed by someone else |
+| PUT | `/api/documents/{id}/assignee` | `IsAdmin` | `{ "userId": "..." }`, or `null` to return it to the queue. `204`, `404`, `409` not awaiting review |
+| GET | `/api/documents/{id}` | Signed in, owner or assignee | `404` if missing **or not yours** |
 | POST | `/api/documents/{id}/requeue` | `IsAdmin` | Re-queues a `Failed` document. `202`, `404` missing, `409` not failed (including `Rejected`) or already re-queued by a concurrent request |
-| GET | `/api/documents/{id}/content` | Signed in, owner | The PDF; `404` for `Quarantined` documents |
+| GET | `/api/documents/{id}/content` | Signed in, owner or assignee | The PDF rebuilt without active content (scripts, actions, annotations, attachments, forms); `404` for `Quarantined` documents, `422` if it cannot be rebuilt |
 | DELETE | `/api/documents/{id}` | `IsAdmin` | Erases the document, file, results, review and audit trail. `204`, `404` |
 
 ## Review

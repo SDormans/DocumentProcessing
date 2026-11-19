@@ -4,7 +4,13 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+- Reviewer work queue: `GET /api/documents/review-queue` lists unassigned `NeedsReview` documents from every owner (oldest first); `POST /api/documents/{id}/claim` assigns one to the calling reviewer in a single conditional update (`409` if someone else won); admins reassign or return a document to the queue with `PUT /api/documents/{id}/assignee`. Assignees can see and review the document. Web: "Review queue" page with a Claim button. Migration `AddReviewerAssignment`.
+- Operations monitoring: `APPLICATIONINSIGHTS_CONNECTION_STRING` sends traces, metrics and logs to Application Insights (alongside or instead of OTLP). New `documentprocessing.queue.depth` gauge. Bicep adds a workspace-based Application Insights resource, an operations workbook (queue depth, outcomes, AI cost, tokens, latency, errors) and a queue-backlog alert (`queueDepthAlertThreshold`, default 100).
+
 ### Security
+- MFA recovery: `POST /api/auth/mfa/enable` now returns 10 one-time `recoveryCodes` (was `204`); `POST /api/auth/mfa/recovery-codes` replaces them; login accepts `recoveryCode` instead of `twoFactorCode`. Admins reset a user's two-factor sign-in with `POST /api/auth/users/{userId}/mfa/reset`.
+- PDF previews are rebuilt without active content: `GET /api/documents/{id}/content` drops JavaScript, open/page actions, annotations, embedded files and forms; a PDF that cannot be rebuilt returns `422` instead of the original file.
 - Two-factor sign-in with an authenticator app (TOTP): `POST /api/auth/mfa/setup` returns a key and `otpauth://` URI, `POST /api/auth/mfa/enable` confirms it; afterwards login needs `twoFactorCode`. `Authentication:RequireAdminMfa=true` makes admin endpoints require a session signed in with a code. Decision recorded in ADR 0008.
 - Retention and deletion: approving a document sets `RetainUntilUtc` (`Retention:CompletedDocumentRetention`, default 7 years); the worker deletes expired documents hourly. Admins can erase a document with `DELETE /api/documents/{id}` (204/404). Both delete the stored file, text extractions, queue commands, results, review and audit trail, and log only the id and reason. Migration `AddDocumentRetention`.
 - Malware scanning: the worker scans each file before parsing (`MalwareScanning:Provider=ClamAv`, `clamd` INSTREAM). Infected files become `Quarantined` and are never processed or served; an unreachable scanner retries instead of skipping the scan. Compose: `MALWARE_SCANNER=ClamAv docker compose --profile malware-scan up`.
@@ -15,6 +21,7 @@ All notable changes to this project are documented here.
 - The worker renews its queue lease throughout OCR and AI extraction (`QueueProcessing:LeaseRenewalInterval`), so a second worker can't reclaim a long-running document; a lost lease cancels the attempt.
 - The worker claims a new command whenever a slot frees up instead of waiting for the slowest document in a batch.
 - Concurrent re-queues of the same document return `409` instead of `500`.
+- Dependabot no longer proposes .NET 11 majors (Microsoft/System/Npgsql packages and `dotnet/*` images) while the projects target .NET 10.
 - Upload errors map to `413`/`415` from a typed `ValidationFailureKind` instead of matching message text.
 - Approve/reject checks every role claim, in the API policy and the application service.
 - Logout requires the anti-forgery token; the SPA sends it.

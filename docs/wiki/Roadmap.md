@@ -15,10 +15,9 @@ Browser (React / Nginx) ──► API (ASP.NET Core, Identity cookie auth) ─�
                                   └──────────── Worker: PdfPig text → LLM (strict JSON schema) → validation → InvoiceResult
 ```
 
-**Verified on 2026-11-16** (Release build, 91 unit + 36 Testcontainers integration tests, full Compose stack driven through Nginx):
-sign-in, upload, worker processing to `NeedsReview`, correction, approve, audit log, anti-forgery, rate limits, per-owner isolation, `/health/live` and `/health/ready`.
+**Status (2026-11-19):** Milestones 0, 1, 2, 4 and 5 are implemented, and Milestone 3 is ready but not deployed. The worker also runs OCR (Tesseract) and the cloud/local model choice. Verified with a Release build, unit, Testcontainers integration, Vitest and Playwright tests, `bicep build` and Compose config validation.
 
-**Not verified yet:** a real LLM endpoint (only `Ai:Provider=Fake`, which returns empty fields), a real Azure deployment, the review UI in a browser.
+**Not verified yet:** a real LLM endpoint in CI (the nightly evaluation needs an `AI_API_KEY` secret), a real Azure deployment and the rollback/restore drills.
 
 ## Milestone 1: fix what's broken
 
@@ -54,7 +53,7 @@ _Merged into `master`: evaluation runner and nightly workflow, OCR, truncation w
 | 3.1 | Provision Azure: Container Apps environment, PostgreSQL Flexible Server, Blob container, managed identity | Ready, not run: `infra/deploy.sh` applies `infra/main.bicep`. Secrets are Container Apps secrets passed at deploy time; Key Vault is not used yet |
 | 3.2 | Set the `AZURE_*` repo variables and federated credential; trust forwarded headers from the ingress | Ready, not run: `infra/setup-github-oidc.sh`. The template trusts the apps subnet via `ForwardedHeaders:KnownNetworks` |
 | 3.3 | First deploy plus smoke test; rehearse a rollback | Check the migration baseline adoption on an empty database |
-| 3.4 | OTLP exporter to Application Insights / Azure Monitor; dashboards and alerts | Partly done: email alerts on worker failures, API errors and restarts. Still open: OTLP export, dashboards for queue depth and AI cost |
+| 3.4 | OTLP exporter to Application Insights / Azure Monitor; dashboards and alerts | Done: Application Insights export (`APPLICATIONINSIGHTS_CONNECTION_STRING`) or OTLP, an operations workbook (queue depth, outcomes, AI cost/tokens/latency, errors) and email alerts on worker failures, API errors, restarts and queue backlog |
 | 3.5 | Backups and restore drill for PostgreSQL and Blob soft delete | Configured (35-day PITR, 14-day soft delete); drill steps in `docs/deployment.md`, not rehearsed yet |
 | 3.6 | Persist ASP.NET Core Data Protection keys | Done: kept in the `dataprotection` blob container (`DataProtection:BlobUri`). Encrypting them with Key Vault is a follow-up |
 | 3.7 | Infrastructure as code (Bicep) for the Azure resources | Done: `infra/main.bicep`, checked in CI with `bicep build` |
@@ -63,26 +62,27 @@ _Merged into `master`: evaluation runner and nightly workflow, OCR, truncation w
 
 | # | Item | Notes |
 |---|---|---|
-| 4.1 | Malware scanning (`Quarantined` status, Defender for Storage or ClamAV, fail closed) | Design in `docs/security-follow-ups.md` |
-| 4.2 | Retention and deletion (`RetainUntil`, scheduled purge, admin `DELETE /api/documents/{id}`) | Same doc. Agree retention periods with the data owner (e.g. 7-year bookkeeping rule in NL) |
-| 4.3 | Security headers in Nginx (CSP, `X-Content-Type-Options`, frame-ancestors, HSTS) | |
-| 4.4 | Decide on external OIDC (Entra ID) vs. local Identity accounts; MFA for admins | Identity is local today |
-| 4.5 | Dependency and container scanning in CI (Dependabot, `dotnet list package --vulnerable`, Trivy) | |
-| 4.6 | Trust forwarded headers from known proxies in every environment | Behind Nginx in Compose, all clients share one login rate-limit partition |
-| 4.7 | `CanApproveReject` checks all role claims | It reads only the first role claim today |
+| 4.1 | Malware scanning (`Quarantined` status, Defender for Storage or ClamAV, fail closed) | Done: ClamAV in the worker, fail closed, `Quarantined` status. Previews are also rebuilt without active PDF content |
+| 4.2 | Retention and deletion (`RetainUntil`, scheduled purge, admin `DELETE /api/documents/{id}`) | Done: 7 years by default (`Retention:CompletedDocumentRetention`), hourly purge, admin delete |
+| 4.3 | Security headers in Nginx (CSP, `X-Content-Type-Options`, frame-ancestors, HSTS) | Done |
+| 4.4 | Decide on external OIDC (Entra ID) vs. local Identity accounts; MFA for admins | Done: local Identity accounts with optional TOTP MFA, recovery codes and admin reset (ADR 0008); `Authentication:RequireAdminMfa` |
+| 4.5 | Dependency and container scanning in CI (Dependabot, `dotnet list package --vulnerable`, Trivy) | Done |
+| 4.6 | Trust forwarded headers from known proxies in every environment | Done: `ForwardedHeaders:KnownProxies`/`KnownNetworks` |
+| 4.7 | `CanApproveReject` checks all role claims | Done |
 
 ## Milestone 5: product features
 
-- Paging, filtering and search on the document list (it loads everything today).
-- Reviewer assignment / work queue instead of owner-only visibility; a decision on documents with no owner.
-- Re-process a document (new model or prompt) and keep result versions.
-- Export approved invoices (CSV or webhook to the accounting system).
+All done:
+- Paging (`skip`/`take`), status filter and file-name search on the document list.
+- Reviewer work queue: reviewers claim unassigned `NeedsReview` documents, and admins assign, reassign or return them. Documents without an owner stay admin-only until they are claimed or assigned.
+- Admin re-processing, with each run kept as a new result version.
+- CSV export of approved invoices (a webhook is still open).
 - Batch upload.
-- Consistent language in the UI and API messages (currently mixed Dutch/English), or i18n.
+- English-only UI and API messages.
 
 ## Continuous: tech debt and hygiene
 
-_On branch `milestone/0-tech-debt` (not merged yet): package alignment, warning fixes with `TreatWarningsAsErrors`, official PdfPig, quieter worker logs and the `libgssapi_krb5` fix, README refresh, Dependabot. Frontend tests and the Playwright smoke test are on `milestone/1-review-fixes`._
+_All items below are done and merged._
 
 - Align package versions on .NET 10: EF Core, Identity and `Npgsql.EntityFrameworkCore.PostgreSQL` are 9.0.0, while `Npgsql` is 10.0.0.
 - Remove the duplicate `Microsoft.EntityFrameworkCore.InMemory` reference (NU1504) and the obsolete `PostgreSqlBuilder()` constructor (CS0618). Then turn on `TreatWarningsAsErrors`.
@@ -94,18 +94,15 @@ _On branch `milestone/0-tech-debt` (not merged yet): package alignment, warning 
 - Add an admin endpoint to re-queue a failed document, and a retention job for completed `QueueCommands`.
 - Full-repo review fixes (done): rejected documents get their own final `Rejected` status instead of `Failed`, the worker renews its queue lease during processing and refills free slots without waiting for the batch, Compose runs in Production, concurrent re-queues return `409`, upload errors map to `413`/`415` by type, logout requires the anti-forgery token, approve/reject checks every role claim, Nginx security headers, trusted-proxy forwarded headers, and a paged document list.
 
-## Suggested order
+## Next steps
 
-1. Milestone 1 as two small PRs: backend (1.2, 1.4, 1.5) and web (1.1, 1.3).
-2. The package version alignment and README refresh.
-3. Milestone 2.1 with a real key, since it validates the core value of the project.
-4. Milestones 3 and 4 before any real invoices are processed.
-5. Milestone 5 as needed.
+1. Run the model evaluation (2.1) with a real key, and choose the production model and budget.
+2. First Azure deploy (3.3), then rehearse the rollback and restore drills (3.5).
+3. Follow-ups: Key Vault for secrets and Data Protection keys, export webhook, Entra ID if single sign-on is needed.
 
 ## Open questions
 
 - Which LLM vendor and budget for production: OpenAI or Azure OpenAI?
 - Is a real Azure subscription available, and who owns it?
 - Retention periods and the legal basis for keeping invoice PDFs.
-- Should documents uploaded before ownership was added (no owner) be visible to all reviewers?
 - Local Identity accounts or Entra ID?
