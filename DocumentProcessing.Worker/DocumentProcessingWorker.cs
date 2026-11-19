@@ -44,8 +44,8 @@ public class DocumentProcessingWorker : BackgroundService
             {
                 try
                 {
-                    foreach (var commandId in await ClaimAsync(freeSlots, stoppingToken))
-                        inFlight.Add(Task.Run(() => ProcessCommandAsync(commandId, stoppingToken), CancellationToken.None));
+                    foreach (var (commandId, leaseOwner) in await ClaimAsync(freeSlots, stoppingToken))
+                        inFlight.Add(Task.Run(() => ProcessCommandAsync(commandId, leaseOwner, stoppingToken), CancellationToken.None));
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -96,23 +96,26 @@ public class DocumentProcessingWorker : BackgroundService
         }
     }
 
-    private async Task<IReadOnlyList<Guid>> ClaimAsync(int count, CancellationToken stoppingToken)
+    private async Task<IReadOnlyList<(Guid Id, string LeaseOwner)>> ClaimAsync(int count, CancellationToken stoppingToken)
     {
+        // A lease owner per claim, not per worker: if this worker reclaims its own expired command while the
+        // first attempt is still running, the stale attempt must fail the lease and concurrency checks.
+        var leaseOwner = $"{_workerId}:{Guid.NewGuid():N}";
         using var scope = _scopeFactory.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<IQueueCommandRepository>();
-        var claimed = await repository.ClaimAsync(_workerId, _options.LeaseDuration, count, stoppingToken);
+        var claimed = await repository.ClaimAsync(leaseOwner, _options.LeaseDuration, count, stoppingToken);
         if (claimed.Count > 0)
             _logger.LogInformation("Claimed {Count} queue command(s).", claimed.Count);
-        return claimed.Select(c => c.Id).ToList();
+        return claimed.Select(c => (c.Id, leaseOwner)).ToList();
     }
 
-    private async Task ProcessCommandAsync(Guid commandId, CancellationToken stoppingToken)
+    private async Task ProcessCommandAsync(Guid commandId, string leaseOwner, CancellationToken stoppingToken)
     {
         try
         {
             using var scope = _scopeFactory.CreateScope();
             var processor = scope.ServiceProvider.GetRequiredService<IQueueCommandProcessor>();
-            await processor.ProcessAsync(commandId, _workerId, stoppingToken);
+            await processor.ProcessAsync(commandId, leaseOwner, stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {

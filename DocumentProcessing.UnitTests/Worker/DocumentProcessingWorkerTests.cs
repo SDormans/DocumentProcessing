@@ -21,9 +21,19 @@ public class DocumentProcessingWorkerTests
         var fast = new QueueCommand(Guid.NewGuid());
         var next = new QueueCommand(Guid.NewGuid());
         var claims = new Queue<IReadOnlyList<QueueCommand>>([[slow, fast], [next]]);
+        var claimOwners = new ConcurrentDictionary<Guid, string>();
         var repository = new Mock<IQueueCommandRepository>();
         repository.Setup(r => r.ClaimAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() => { lock (claims) return claims.Count > 0 ? claims.Dequeue() : []; });
+            .ReturnsAsync((string owner, TimeSpan _, int _, CancellationToken _) =>
+            {
+                lock (claims)
+                {
+                    var batch = claims.Count > 0 ? claims.Dequeue() : [];
+                    foreach (var command in batch)
+                        claimOwners[command.Id] = owner;
+                    return batch;
+                }
+            });
 
         var processor = new BlockingProcessor(slow.Id);
         var services = new ServiceCollection()
@@ -38,6 +48,8 @@ public class DocumentProcessingWorkerTests
         {
             await processor.WaitForAsync(next.Id, TimeSpan.FromSeconds(5));
             processor.Processed.Should().Contain([fast.Id, next.Id]).And.NotContain(slow.Id);
+            processor.Owners.Should().Contain(fast.Id, claimOwners[fast.Id]).And.Contain(next.Id, claimOwners[next.Id]);
+            claimOwners[next.Id].Should().NotBe(claimOwners[fast.Id], "each claim gets its own lease owner, so a reclaimed command fences out the earlier attempt");
             repository.Verify(r => r.ClaimAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), 1, It.IsAny<CancellationToken>()), Times.AtLeastOnce,
                 "only the freed slot is claimed while the slow command is still running");
         }
@@ -53,9 +65,11 @@ public class DocumentProcessingWorkerTests
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _done = new();
         public ConcurrentQueue<Guid> Processed { get; } = new();
+        public ConcurrentDictionary<Guid, string> Owners { get; } = new();
 
         public async Task<QueueCommandOutcome> ProcessAsync(Guid commandId, string leaseOwner, CancellationToken cancellationToken)
         {
+            Owners[commandId] = leaseOwner;
             if (commandId == blockedId)
                 await _release.Task.WaitAsync(cancellationToken);
             Processed.Enqueue(commandId);

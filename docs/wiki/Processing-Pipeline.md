@@ -56,7 +56,7 @@ Each finding is an `Error` or a `Warning`.
 
 In one transaction: the `InvoiceExtractionResult`, `Document.Status = NeedsReview` and `QueueCommand.Status = Completed`.
 
-- **Fencing**: `LeaseOwner` is a concurrency token. A worker that lost its lease gets a concurrency error and discards its result.
+- **Fencing**: `LeaseOwner` is a concurrency token, unique per claim (worker id plus a claim id), so even the same worker re-claiming its own expired command fences out the earlier attempt. An attempt that lost its lease gets a concurrency error and discards its result.
 - **Idempotency**: a redelivered command for a document already in `NeedsReview`/`Completed`/`Rejected` is completed without calling the LLM again.
 - **Retries**: transient errors (timeouts, HTTP 5xx) back off exponentially (`BaseRetryDelay × 2^(attempt-1)`) up to `MaxAttempts` (3). Deterministic failures (no text, refused or schema-invalid output) fail immediately. On final failure both the command and the document go to `Failed`, with `LastErrorCategory` set.
 
