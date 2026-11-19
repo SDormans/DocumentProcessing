@@ -20,6 +20,15 @@ public interface IDocumentService
     /// </summary>
     Task<RequeueResult> RequeueAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>Unassigned documents awaiting review from every owner, oldest first.</summary>
+    Task<PagedResult<DocumentDto>> GetReviewQueueAsync(int skip = 0, int take = DocumentService.DefaultPageSize, CancellationToken cancellationToken = default);
+
+    /// <summary>Assigns an unassigned document awaiting review to the current user.</summary>
+    Task<AssignmentResult> ClaimAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Assigns a document awaiting review to <paramref name="userId"/>, or back to the queue when null (admins).</summary>
+    Task<AssignmentResult> AssignAsync(Guid id, string? userId, CancellationToken cancellationToken = default);
+
     /// <summary>Re-queues a failed document the current user can access, to be processed with <paramref name="modelType"/>.</summary>
     Task<ModelSwitchResult> RetryWithModelAsync(Guid id, string? modelType, CancellationToken cancellationToken = default);
 
@@ -30,6 +39,14 @@ public interface IDocumentService
     Task<DocumentPage> GetDocumentPageAsync(DocumentQuery query, CancellationToken cancellationToken = default);
 
     Task<DocumentFileDto?> GetDocumentFileAsync(Guid id, CancellationToken cancellationToken = default);
+}
+
+public enum AssignmentResult
+{
+    Assigned,
+    NotFound,
+    NotAwaitingReview,
+    AssignedToSomeoneElse
 }
 
 public enum RequeueResult

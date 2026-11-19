@@ -78,6 +78,17 @@ public class Document
     /// </summary>
     public DateTime? RetainUntilUtc { get; private set; }
 
+    /// <summary>The reviewer working on this document; null while it waits in the shared review queue.</summary>
+    public string? AssignedToUserId { get; private set; }
+
+    public DateTime? AssignedAtUtc { get; private set; }
+
+    public void AssignTo(string? userId)
+    {
+        AssignedToUserId = string.IsNullOrWhiteSpace(userId) ? null : userId;
+        AssignedAtUtc = AssignedToUserId is null ? null : DateTime.UtcNow;
+    }
+
     public void SetRetention(DateTime retainUntilUtc)
     {
         RetainUntilUtc = retainUntilUtc;

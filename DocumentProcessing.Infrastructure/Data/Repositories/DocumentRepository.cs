@@ -31,10 +31,36 @@ public class DocumentRepository : IDocumentRepository
         return new PagedResult<Document>(items, total);
     }
 
+    public async Task<PagedResult<Document>> GetReviewQueueAsync(int skip, int take, CancellationToken cancellationToken = default)
+    {
+        var queue = _dbContext.Documents.Where(d => d.Status == DocumentStatus.NeedsReview && d.AssignedToUserId == null);
+        var total = await queue.CountAsync(cancellationToken);
+        var items = await queue
+            .OrderBy(d => d.CreatedAtUtc)
+            .ThenBy(d => d.Id)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+        return new PagedResult<Document>(items, total);
+    }
+
+    public async Task<bool> TryClaimAsync(Guid id, string userId, CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+        var updated = await _dbContext.Documents
+            .Where(d => d.Id == id && d.Status == DocumentStatus.NeedsReview && d.AssignedToUserId == null)
+            .ExecuteUpdateAsync(set => set
+                .SetProperty(d => d.AssignedToUserId, userId)
+                .SetProperty(d => d.AssignedAtUtc, now), cancellationToken);
+        return updated == 1;
+    }
+
     public async Task<(IReadOnlyList<Document> Items, int TotalCount)> QueryAsync(
         DocumentQuery query, string? ownerId, CancellationToken cancellationToken = default)
     {
-        var documents = ownerId is null ? _dbContext.Documents : _dbContext.Documents.Where(d => d.OwnerId == ownerId);
+        var documents = ownerId is null
+            ? _dbContext.Documents
+            : _dbContext.Documents.Where(d => d.OwnerId == ownerId || d.AssignedToUserId == ownerId);
         if (query.Status is { } status)
             documents = documents.Where(d => d.Status == status);
         if (!string.IsNullOrWhiteSpace(query.Search))

@@ -139,6 +139,13 @@ namespace DocumentProcessing.Infrastructure.Data.Migrations
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
 
+                    b.Property<DateTime?>("AssignedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AssignedToUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
                     b.Property<string>("ContentHash")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -187,6 +194,8 @@ namespace DocumentProcessing.Infrastructure.Data.Migrations
                     b.HasIndex("Status");
 
                     b.HasIndex("OwnerId", "CreatedAtUtc");
+
+                    b.HasIndex("Status", "AssignedToUserId");
 
                     b.ToTable("Documents", (string)null);
                 });

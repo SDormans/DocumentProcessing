@@ -62,6 +62,44 @@ public class DocumentService : IDocumentService
         return RequeueResult.Requeued;
     }
 
+    public async Task<PagedResult<DocumentDto>> GetReviewQueueAsync(int skip = 0, int take = DefaultPageSize, CancellationToken cancellationToken = default)
+    {
+        var page = await _documentRepository.GetReviewQueueAsync(Math.Max(0, skip), Math.Clamp(take, 1, MaxPageSize), cancellationToken);
+        return new PagedResult<DocumentDto>(page.Items.Select(MapToDto).ToList(), page.TotalCount);
+    }
+
+    public async Task<AssignmentResult> ClaimAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(_currentUser.UserId))
+            return AssignmentResult.NotFound;
+        if (await _documentRepository.TryClaimAsync(id, _currentUser.UserId, cancellationToken))
+        {
+            _logger.LogInformation("Document {DocumentId} claimed by {UserId}.", id, _currentUser.UserId);
+            return AssignmentResult.Assigned;
+        }
+
+        var document = await _documentRepository.GetByIdAsync(id, cancellationToken);
+        if (document is null)
+            return AssignmentResult.NotFound;
+        if (document.Status != DocumentStatus.NeedsReview)
+            return AssignmentResult.NotAwaitingReview;
+        return document.AssignedToUserId == _currentUser.UserId ? AssignmentResult.Assigned : AssignmentResult.AssignedToSomeoneElse;
+    }
+
+    public async Task<AssignmentResult> AssignAsync(Guid id, string? userId, CancellationToken cancellationToken = default)
+    {
+        var document = await _documentRepository.GetByIdAsync(id, cancellationToken);
+        if (document is null)
+            return AssignmentResult.NotFound;
+        if (document.Status != DocumentStatus.NeedsReview)
+            return AssignmentResult.NotAwaitingReview;
+
+        document.AssignTo(userId);
+        await _documentRepository.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Document {DocumentId} assigned to {AssigneeId} by {UserId}.", id, document.AssignedToUserId ?? "(queue)", _currentUser.UserId);
+        return AssignmentResult.Assigned;
+    }
+
     /// <summary>Returns false when a concurrent request re-queued the document first.</summary>
     private async Task<bool> TrySaveRequeueAsync(Guid documentId, CancellationToken cancellationToken)
     {
@@ -337,7 +375,9 @@ public class DocumentService : IDocumentService
             Status = document.Status.ToString(),
             CreatedAtUtc = document.CreatedAtUtc,
             OwnerId = document.OwnerId,
-            AiModelType = document.AiModelType.ToString()
+            AiModelType = document.AiModelType.ToString(),
+            AssignedToUserId = document.AssignedToUserId,
+            AssignedAtUtc = document.AssignedAtUtc
         };
     }
 }

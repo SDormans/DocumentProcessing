@@ -11,6 +11,12 @@ public interface IDocumentRepository
     /// <summary>Newest first; <paramref name="ownerId"/> null returns every owner's documents.</summary>
     Task<PagedResult<Document>> GetPageAsync(string? ownerId, int skip, int take, CancellationToken cancellationToken = default);
 
+    /// <summary>Unassigned documents awaiting review, oldest first (the shared review queue).</summary>
+    Task<PagedResult<Document>> GetReviewQueueAsync(int skip, int take, CancellationToken cancellationToken = default);
+
+    /// <summary>Assigns an unassigned <c>NeedsReview</c> document in one conditional update, so two reviewers cannot both claim it.</summary>
+    Task<bool> TryClaimAsync(Guid id, string userId, CancellationToken cancellationToken = default);
+
     /// <summary>Newest first, filtered by status and file name. <paramref name="ownerId"/> null means all owners.</summary>
     Task<(IReadOnlyList<Document> Items, int TotalCount)> QueryAsync(
         DocumentQuery query, string? ownerId, CancellationToken cancellationToken = default);

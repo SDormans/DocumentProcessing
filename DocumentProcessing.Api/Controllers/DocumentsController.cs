@@ -201,6 +201,52 @@ public class DocumentsController : ControllerBase
         };
     }
 
+    /// <summary>The shared review queue: unassigned documents awaiting review from every owner, oldest first.</summary>
+    [HttpGet("review-queue")]
+    [Authorize(Policy = "CanApproveReject")]
+    [ProducesResponseType(typeof(IEnumerable<DocumentDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetReviewQueue(
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = DocumentService.DefaultPageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var page = await _documentService.GetReviewQueueAsync(skip, take, cancellationToken);
+        Response.Headers[TotalCountHeader] = page.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return Ok(page.Items);
+    }
+
+    /// <summary>Takes a document from the review queue; it is then visible to and reviewable by the claimer.</summary>
+    [HttpPost("{id:guid}/claim")]
+    [Authorize(Policy = "CanApproveReject")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ClaimDocument(Guid id, CancellationToken cancellationToken) =>
+        AssignmentResponse(await _documentService.ClaimAsync(id, cancellationToken));
+
+    /// <summary>Assigns a document awaiting review to a user, or returns it to the queue with a null <c>userId</c>.</summary>
+    [HttpPut("{id:guid}/assignee")]
+    [Authorize(Policy = "IsAdmin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> AssignDocument(Guid id, [FromBody] AssignDocumentRequest request, CancellationToken cancellationToken)
+    {
+        if (request.UserId is { Length: > 450 })
+            return BadRequest(Error("userId is too long."));
+        return AssignmentResponse(await _documentService.AssignAsync(id, request.UserId, cancellationToken));
+    }
+
+    private IActionResult AssignmentResponse(AssignmentResult result) => result switch
+    {
+        AssignmentResult.Assigned => NoContent(),
+        AssignmentResult.NotAwaitingReview => Conflict(Error("Only documents awaiting review can be assigned.")),
+        AssignmentResult.AssignedToSomeoneElse => Conflict(Error("Another reviewer already claimed this document.")),
+        _ => NotFound(Error("Document not found."))
+    };
+
+    public sealed record AssignDocumentRequest(string? UserId);
+
     /// <summary>
     /// Returns the original PDF document via an authorized endpoint.
     /// </summary>

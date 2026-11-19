@@ -10,6 +10,8 @@ public class DocumentDto
     public DateTime CreatedAtUtc { get; set; }
     public string? OwnerId { get; set; }
     public string AiModelType { get; set; } = string.Empty;
+    public string? AssignedToUserId { get; set; }
+    public DateTime? AssignedAtUtc { get; set; }
 }
 
 public class UploadDocumentResponse

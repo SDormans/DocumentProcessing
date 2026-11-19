@@ -44,5 +44,5 @@ public static class DocumentAccess
 {
     public static bool CanAccess(this ICurrentUser user, Document document) =>
         user.HasUnrestrictedDocumentAccess ||
-        (!string.IsNullOrEmpty(user.UserId) && document.OwnerId == user.UserId);
+        (!string.IsNullOrEmpty(user.UserId) && (document.OwnerId == user.UserId || document.AssignedToUserId == user.UserId));
 }
