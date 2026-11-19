@@ -4,6 +4,13 @@
   "parameters": {
     "bootstrapAdminEmail": { "value": "<admin-email>" },
     "alertEmail": { "value": "<ops-email>" },
-    "imageTag": { "value": "latest" }
+    "aiCloudProvider": { "value": "OpenAI" },
+    "aiCloudEndpoint": { "value": "https://api.openai.com/v1/" },
+    "aiCloudModel": { "value": "gpt-4o-mini" },
+    "aiLocalProvider": { "value": "None" },
+    "aiDefaultModelType": { "value": "Cloud" },
+    "aiFallbackMode": { "value": "None" },
+    "malwareScanner": { "value": "None" },
+    "requireAdminMfa": { "value": false }
   }
 }

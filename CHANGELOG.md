@@ -25,6 +25,8 @@ All notable changes to this project are documented here.
 - Unused queue methods `GetPendingAsync`, `GetReadyForProcessingAsync` and `QueueCommand.SetNextAttempt`.
 
 ### Added
+- Azure deployment, ready but not yet run: `infra/main.bicep` creates the Container Apps environment in a virtual network, PostgreSQL without a public endpoint, Blob storage, a managed identity, Log Analytics and email alerts, and passes the cloud/local AI settings to both the API and the worker. `infra/deploy.sh` runs what-if, applies it, creates the database login with a Container Apps job and waits for `/health/ready`; `infra/setup-github-oidc.sh` sets up the GitHub sign-in and `AZURE_*` variables for `cd.yml`. CI validates the template and scripts. See `docs/deployment.md`.
+- Data Protection keys persist to blob storage when `DataProtection:BlobUri` is set, so deploys don't sign users out.
 - Local LLM from a model file in the repo: put a `.gguf` file in `models/` (git-ignored), set `LLAMA_MODEL_FILE`, and `docker compose --profile llamacpp up -d` serves it with llama.cpp on the CPU as the Local model. The API and worker map `host.docker.internal` on Linux too, so they can reach a model runtime on the host; `AI_LOCAL_ATTEMPT_TIMEOUT_SECONDS`/`AI_LOCAL_TOTAL_TIMEOUT_SECONDS` set the local timeouts.
 - Choice between a cloud and a local AI model: a dropdown in the header saves each user's choice (`GET/PUT /api/settings/ai`), each upload records it, and the worker extracts with it. Settings under `Ai:Cloud:*`, `Ai:Local:*`, `Ai:DefaultModelType` and `Ai:Fallback:Mode`, validated at startup. Local runtimes (Ollama, llama.cpp) use the OpenAI-compatible API; a new `AnthropicProvider` supports Claude. Failed documents show why and can be retried with the other model (`POST /api/documents/{id}/retry-with-model`); `Ai:Fallback:Mode=Automatic` switches models without asking. Optional `ollama` service under the `local-llm` Compose profile. See ADR 0007.
 - Real-model evaluation: `npm run evaluate:predict` runs the production prompt, AI provider and validation over the corpus (`tools/DocumentProcessing.Evaluation`), `npm run evaluate:report` scores it. `.github/workflows/evaluation.yml` does both nightly and on demand when the `AI_API_KEY` secret is set.
@@ -34,11 +36,6 @@ All notable changes to this project are documented here.
 
 ### Removed
 - The unused `Tesseract` (native wrapper), `PDFsharp-MigraDoc` and `SkiaSharp` packages and the placeholder `OcrPdfTextExtractor`/`PdfPageRenderer`.
-
-### Added
-- `infra/main.bicep`: Azure Container Apps environment, PostgreSQL with 35-day backups, storage with soft delete and lifecycle backstop, managed identity, ClamAV sidecar and email alerts. Validated with `bicep build`; not deployed.
-- Data Protection keys persist to blob storage when `DataProtection:BlobUri` is set, so deploys don't sign users out.
-- Deployment docs: Bicep usage, rollback drill, backup and restore drill.
 
 ### Added
 - ASP.NET Core Identity user store backed by PostgreSQL, replacing the in-memory `DevelopmentUserService`; the API can now start outside Development.

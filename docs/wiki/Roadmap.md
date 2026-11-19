@@ -51,13 +51,13 @@ _Merged into `master`: evaluation runner and nightly workflow, OCR, truncation w
 
 | # | Item | Notes |
 |---|---|---|
-| 3.1 | Provision Azure: Container Apps environment, PostgreSQL Flexible Server, Blob container, managed identity, Key Vault | Steps in `docs/deployment.md` |
-| 3.2 | Set the `AZURE_*` repo variables, federated credential, `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` | Turns on the deploy job in `cd.yml` |
+| 3.1 | Provision Azure: Container Apps environment, PostgreSQL Flexible Server, Blob container, managed identity | Ready, not run: `infra/deploy.sh` applies `infra/main.bicep`. Secrets are Container Apps secrets passed at deploy time; Key Vault is not used yet |
+| 3.2 | Set the `AZURE_*` repo variables and federated credential; trust forwarded headers from the ingress | Ready, not run: `infra/setup-github-oidc.sh`. The template trusts the apps subnet via `ForwardedHeaders:KnownNetworks` |
 | 3.3 | First deploy plus smoke test; rehearse a rollback | Check the migration baseline adoption on an empty database |
-| 3.4 | OTLP exporter to Application Insights / Azure Monitor; dashboards and alerts | Queue depth, failed commands, extraction failure rate, AI cost |
-| 3.5 | Backups and restore drill for PostgreSQL and Blob soft delete | |
-| 3.6 | Persist ASP.NET Core Data Protection keys (Blob + Key Vault) | Without it, every deploy or restart signs everyone out, and API replicas can't share cookies |
-| 3.7 | Infrastructure as code (Bicep) for the Azure resources | Today the setup is manual commands in `docs/deployment.md` |
+| 3.4 | OTLP exporter to Application Insights / Azure Monitor; dashboards and alerts | Partly done: email alerts on worker failures, API errors and restarts. Still open: OTLP export, dashboards for queue depth and AI cost |
+| 3.5 | Backups and restore drill for PostgreSQL and Blob soft delete | Configured (35-day PITR, 14-day soft delete); drill steps in `docs/deployment.md`, not rehearsed yet |
+| 3.6 | Persist ASP.NET Core Data Protection keys | Done: kept in the `dataprotection` blob container (`DataProtection:BlobUri`). Encrypting them with Key Vault is a follow-up |
+| 3.7 | Infrastructure as code (Bicep) for the Azure resources | Done: `infra/main.bicep`, checked in CI with `bicep build` |
 
 ## Milestone 4: security and compliance
 

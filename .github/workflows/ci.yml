@@ -60,6 +60,11 @@ jobs:
       - name: Build frontend
         run: npm --prefix DocumentProcessing.Web run build
 
+      - name: Validate Azure infrastructure
+        run: |
+          az bicep build --file infra/main.bicep --stdout > /dev/null
+          shellcheck infra/*.sh
+
       - name: Validate Docker Compose
         run: docker compose --env-file .env.example config --quiet
 

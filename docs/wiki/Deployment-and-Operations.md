@@ -25,12 +25,14 @@ Until the `AZURE_*` repository variables exist, CD only publishes images.
 | `documentprocessing-api` | Internal :8080 | min 1. Applies migrations on start |
 | `documentprocessing-worker` | None | min 1, scale out freely (`SKIP LOCKED`) |
 
-Plus Azure Database for PostgreSQL Flexible Server, a storage account (`documents` container) and a user-assigned managed identity with *Storage Blob Data Contributor*.
+Plus a virtual network, Azure Database for PostgreSQL Flexible Server without a public endpoint, a storage account (`documents` and `dataprotection` containers, soft delete), a user-assigned managed identity with *Storage Blob Data Contributor*, Log Analytics and email alerts. `infra/main.bicep` creates all of it; `infra/deploy.sh` applies it and creates the database login; `infra/setup-github-oidc.sh` sets up the GitHub sign-in and variables.
 
 ## Required settings in Azure
 
-- API: `ConnectionStrings__DefaultConnection` (secret), `Authentication__Bootstrap__*`, `FileStorage__Provider=AzureBlob` + `ServiceUri` + `ManagedIdentityClientId`, `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`
-- Worker: same database and storage settings, plus `Ai__Provider=OpenAI`, `Ai__ApiKey` (secret), `Ai__ModelName`
+The Bicep template sets these; the full table is in [docs/deployment.md](https://github.com/SDormans/DocumentProcessing/blob/master/docs/deployment.md#settings-the-template-sets-on-the-apps).
+
+- API and worker: `ConnectionStrings__DefaultConnection` (secret), `FileStorage__Provider=AzureBlob` + `ServiceUri` + `ManagedIdentityClientId`, and the same AI settings: `Ai__Cloud__*` (key as a secret), `Ai__Local__*`, `Ai__DefaultModelType`, `Ai__Fallback__Mode`
+- API only: `Authentication__Bootstrap__*`, `Authentication__CookieSecurePolicy=Always`, `ForwardedHeaders__KnownNetworks__0=<apps subnet>`, `DataProtection__BlobUri`
 - Web: `API_UPSTREAM=https://<api internal fqdn>`
 - GitHub: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP` (variables), and a federated credential for `environment:production`
 
@@ -53,8 +55,8 @@ Plus Azure Database for PostgreSQL Flexible Server, a storage account (`document
 | Find stuck work | `SELECT * FROM "QueueCommands" WHERE "Status" IN ('Pending','Processing') ORDER BY "CreatedAtUtc";` |
 | Why did a document fail | `LastErrorCategory` on the command, plus worker logs filtered by `DocumentId` |
 | Reset the local demo | `docker compose down -v && docker compose up -d` |
-| Rotate the AI key | Update the worker's Container Apps secret, then restart the revision |
+| Rotate the AI key or a password | Set the new value in the environment and re-run `infra/deploy.sh` (it keeps the running image) |
 
 ## Backups
 
-Use PostgreSQL Flexible Server's automated backups (point-in-time restore) and Blob soft delete. A restore drill is still on the [Roadmap](Roadmap.md).
+Use PostgreSQL Flexible Server's automated backups (point-in-time restore) and Blob soft delete. The restore and rollback drills are in [docs/deployment.md](https://github.com/SDormans/DocumentProcessing/blob/master/docs/deployment.md#backup-and-restore-drill).

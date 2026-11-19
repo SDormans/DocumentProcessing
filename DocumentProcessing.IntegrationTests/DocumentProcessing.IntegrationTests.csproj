@@ -20,6 +20,8 @@
     <PackageReference Include="Moq" Version="4.21.0" />
     
     <ProjectReference Include="..\DocumentProcessing.Api\DocumentProcessing.Api.csproj" />
+    <!-- Lets NuGet prune ASP.NET Core packages (e.g. DataProtection 3.1 from the Azure key-ring package) that the shared framework provides. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
 </Project>
