@@ -20,7 +20,9 @@ sign-in, upload, worker processing to `NeedsReview`, correction, approve, audit 
 
 **Not verified yet:** a real LLM endpoint (only `Ai:Provider=Fake`, which returns empty fields), a real Azure deployment, the review UI in a browser.
 
-## Milestone 1: fix what's broken (next)
+## Milestone 1: fix what's broken
+
+_Implemented on branch `milestone/1-review-fixes` (not merged yet): all five items, with unit and integration tests per item, Vitest tests for the review form and a Playwright browser smoke test (`e2e` CI job)._
 
 | # | Item | Why | Where |
 |---|---|---|---|
@@ -34,13 +36,16 @@ Exit criteria: an integration test per item, and a browser smoke test of upload 
 
 ## Milestone 2: real extraction, measured
 
+_Merged into `master`: evaluation runner and nightly workflow, OCR, truncation warning, cost budget. The scored run (2.1/2.4) still needs an API key._
+
 | # | Item | Notes |
 |---|---|---|
 | 2.1 | Run `Ai:Provider=OpenAi` against OpenAI or Azure OpenAI on the 50-invoice synthetic corpus | Publish the scorecard (field accuracy, latency, cost per invoice) in the README. This replaces the "Planned" evaluation row |
 | 2.2 | Add an evaluation run to CI (manual or nightly, behind a secret) | Catch prompt/schema regressions |
-| 2.3 | OCR for scanned PDFs | `OcrPdfTextExtractor` exists but isn't registered, and the worker image has no Tesseract or tessdata. Either package Tesseract in the worker image, or send page images to a vision model |
+| 2.3 | OCR for scanned PDFs | Done: `HybridPdfTextExtractor` runs `TesseractCliOcrProvider` on pages without a text layer, and the worker image installs `tesseract-ocr` (`eng`, `nld`) and `poppler-utils` |
 | 2.4 | Choose a default model and cost budget | Use the existing token/cost metrics. Consider an alert when a document exceeds its budget |
 | 2.5 | Handle long documents | Prompt text is cut at `InvoiceExtractor.MaxPromptTextCharacters` (48k). Flag documents that hit the cut in validation |
+| 2.6 | Document the OCR pipeline and its requirements | The README used to say the Tesseract/PDF adapters exist but OCR isn't wired up: the invoice extractor methods were unimplemented, Compose didn't start the worker, and uploads stopped at `Uploaded`. Its requirements listed only .NET 10, Node 24+ and Docker, not Tesseract. Done: the README and wiki now describe the working pipeline, and the requirements list Tesseract and Poppler for worker runs outside Docker (the Compose `worker` image bundles them) |
 
 ## Milestone 3: first production deploy (Azure)
 
@@ -77,6 +82,8 @@ Exit criteria: an integration test per item, and a browser smoke test of upload 
 
 ## Continuous: tech debt and hygiene
 
+_On branch `milestone/0-tech-debt` (not merged yet): package alignment, warning fixes with `TreatWarningsAsErrors`, official PdfPig, quieter worker logs and the `libgssapi_krb5` fix, README refresh, Dependabot. Frontend tests and the Playwright smoke test are on `milestone/1-review-fixes`._
+
 - Align package versions on .NET 10: EF Core, Identity and `Npgsql.EntityFrameworkCore.PostgreSQL` are 9.0.0, while `Npgsql` is 10.0.0.
 - Remove the duplicate `Microsoft.EntityFrameworkCore.InMemory` reference (NU1504) and the obsolete `PostgreSqlBuilder()` constructor (CS0618). Then turn on `TreatWarningsAsErrors`.
 - Replace the custom `PdfPig 1.7.0-custom-5` with an official release, or document where it comes from.
@@ -85,6 +92,7 @@ Exit criteria: an integration test per item, and a browser smoke test of upload 
 - Update the README: parts still describe the old state ("not yet a working end-to-end system", "uploads are not queued"). Point to this wiki for the details.
 - Write ADRs for the decisions not yet written down (see [Architecture Decisions](Architecture-Decisions.md)).
 - Add an admin endpoint to re-queue a failed document, and a retention job for completed `QueueCommands`.
+- Full-repo review fixes (done): rejected documents get their own final `Rejected` status instead of `Failed`, the worker renews its queue lease during processing and refills free slots without waiting for the batch, Compose runs in Production, concurrent re-queues return `409`, upload errors map to `413`/`415` by type, logout requires the anti-forgery token, approve/reject checks every role claim, Nginx security headers, trusted-proxy forwarded headers, and a paged document list.
 
 ## Suggested order
 

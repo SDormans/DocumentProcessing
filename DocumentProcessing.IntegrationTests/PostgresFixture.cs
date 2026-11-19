@@ -7,8 +7,7 @@ namespace DocumentProcessing.IntegrationTests;
 /// <summary>One PostgreSQL container for the test run; each test class gets its own database in it.</summary>
 public sealed class PostgresFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:16-alpine")
         .Build();
 
     public Task InitializeAsync() => _container.StartAsync();

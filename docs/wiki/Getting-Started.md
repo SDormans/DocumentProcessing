@@ -36,7 +36,7 @@ Upload one of the PDFs in the web app. Within a few seconds the worker moves the
 
 > With the default `AI_PROVIDER=Fake`, the extracted fields are **empty**, so validation reports missing required fields. That is expected. To get real values, set `AI_PROVIDER=OpenAI`, `AI_API_KEY` and `AI_MODEL` in `.env` and restart the worker (see [Configuration](Configuration.md)).
 
-> Uploads over 1 MB currently fail through the web app (Nginx returns 413). See [Roadmap](Roadmap.md) item 1.1.
+> The review screen shows the PDF next to every extracted field. Fill in the required fields (supplier, invoice number, invoice date, total), save the corrections, then approve.
 
 ## Add users
 
@@ -69,3 +69,14 @@ dotnet run --project DocumentProcessing.Api
 dotnet run --project DocumentProcessing.Worker      # same connection string and FileStorage settings
 npm --prefix DocumentProcessing.Web run dev         # Vite dev server
 ```
+
+The worker has no committed `appsettings.json` and exits with `ConnectionStrings:DefaultConnection is required` until a connection string is configured. Its launch profile sets `DOTNET_ENVIRONMENT=Development`. Use one of:
+
+- **Environment variable** (above): `ConnectionStrings__DefaultConnection`, in the same shell as `dotnet run`.
+- **User secrets** (stored outside the repo, Development only):
+  ```bash
+  dotnet user-secrets set ConnectionStrings:DefaultConnection "Host=localhost;Port=5432;Database=documentprocessing;Username=<user>;Password=<password>" --project DocumentProcessing.Worker
+  ```
+- **Local settings file** (Development only): copy `DocumentProcessing.Worker/appsettings.Development.example.json` to `appsettings.Development.json` in the same folder and fill in the placeholders. `.gitignore` excludes `appsettings.Development.json`, and `.dockerignore` keeps it out of images.
+
+The API applies migrations, so start it once against the database before the worker.

@@ -33,3 +33,17 @@ The report contains per-field and overall exact-match accuracy (text comparison 
 ## Current results
 
 No model has been scored yet. The baseline without predictions reports 0% coverage, and that is intentional: the tool never invents numbers. Producing the first real scorecard with the OpenAI provider is milestone 2 on the [Roadmap](Roadmap.md).
+
+## Scoring a real model
+
+```bash
+export Ai__Provider=OpenAI Ai__ApiKey=... Ai__ModelName=gpt-4o-mini
+export Ai__InputCostPerMillionTokens=0.15 Ai__OutputCostPerMillionTokens=0.60   # for cost per invoice
+npm run evaluate:predict -- --limit 10   # omit --limit for all 50
+npm run evaluate:report                  # writes evaluation-data/generated/report.json
+```
+
+`evaluate:predict` uses the same prompt (`InvoiceExtractor.BuildPrompt`), provider and validation rules as the worker, so the report measures production behaviour. Line items are returned as text by the extraction schema, so predictions list `lineItems` in `unscoredFields` and it is left out of the accuracy until the schema returns structured rows.
+
+In CI, `.github/workflows/evaluation.yml` runs nightly and on demand. It is skipped unless the `AI_API_KEY` secret is set; the model and prices come from the `AI_ENDPOINT`, `AI_MODEL`, `AI_API_KEY_HEADER`, `AI_INPUT_COST_PER_MILLION` and `AI_OUTPUT_COST_PER_MILLION` repository variables. The report is in the job summary and the `model-evaluation` artifact.
+

@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 
 COPY DocumentProcessing.Domain/DocumentProcessing.Domain.csproj DocumentProcessing.Domain/
@@ -20,6 +20,8 @@ RUN dotnet publish DocumentProcessing.Api/DocumentProcessing.Api.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS runtime
 WORKDIR /app
 COPY --from=build --chown=app:app /app/publish .
+# krb5-libs: Npgsql probes for GSSAPI at startup and logs an error when libgssapi_krb5.so.2 is missing.
+RUN apk add --no-cache krb5-libs
 RUN mkdir -p /app/data/storage && chown -R app:app /app/data
 ENV ASPNETCORE_HTTP_PORTS=8080
 EXPOSE 8080

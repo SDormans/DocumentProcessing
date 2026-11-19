@@ -4,11 +4,17 @@ public class AiOptions
 {
     public const string SectionName = "Ai";
 
-    /// <summary><c>Fake</c> (default, deterministic sample data) or <c>OpenAI</c> (any OpenAI-compatible Chat Completions API).</summary>
+    /// <summary>
+    /// <c>Fake</c> (deterministic sample data), <c>OpenAI</c> (any OpenAI-compatible Chat Completions API, including
+    /// Azure OpenAI, Ollama and llama.cpp), <c>Anthropic</c> (Messages API) or <c>None</c> (this model type is disabled).
+    /// </summary>
     public string Provider { get; set; } = "Fake";
 
-    /// <summary>Base URL of the API, e.g. <c>https://api.openai.com/v1/</c> or <c>https://{resource}.openai.azure.com/openai/v1/</c>.</summary>
-    public string Endpoint { get; set; } = "https://api.openai.com/v1/";
+    /// <summary>
+    /// Base URL of the API, e.g. <c>https://api.openai.com/v1/</c>, <c>https://{resource}.openai.azure.com/openai/v1/</c>,
+    /// <c>http://localhost:11434/v1/</c> (Ollama) or <c>http://localhost:8080/v1/</c> (llama.cpp). Empty uses the provider default.
+    /// </summary>
+    public string Endpoint { get; set; } = string.Empty;
 
     public string? ApiKey { get; set; }
 
@@ -32,4 +38,42 @@ public class AiOptions
 
     /// <summary>Price per one million output tokens, used for cost telemetry.</summary>
     public decimal OutputCostPerMillionTokens { get; set; }
+}
+
+/// <summary>
+/// <c>Ai:*</c>: the cloud model (<c>Ai:Cloud</c>), the local model (<c>Ai:Local</c>), which one new uploads use by
+/// default and what happens when the chosen one fails. A flat <c>Ai:Provider</c>/<c>Ai:Endpoint</c>/... configuration
+/// without an <c>Ai:Cloud</c> section is read as the cloud model, so older configuration keeps working.
+/// </summary>
+public class AiSettings
+{
+    public const string SectionName = "Ai";
+
+    public string DefaultModelType { get; set; } = "Cloud";
+
+    public AiFallbackOptions Fallback { get; set; } = new();
+
+    public AiOptions Cloud { get; set; } = new();
+
+    public AiOptions Local { get; set; } = new() { Provider = "None" };
+
+    public static AiSettings Bind(Microsoft.Extensions.Configuration.IConfiguration configuration)
+    {
+        var section = configuration.GetSection(SectionName);
+        var settings = new AiSettings();
+        Microsoft.Extensions.Configuration.ConfigurationBinder.Bind(section, settings);
+        var cloud = section.GetSection("Cloud");
+        if (!Microsoft.Extensions.Configuration.ConfigurationExtensions.Exists(cloud))
+        {
+            settings.Cloud = new AiOptions();
+            Microsoft.Extensions.Configuration.ConfigurationBinder.Bind(section, settings.Cloud);
+        }
+        return settings;
+    }
+}
+
+public class AiFallbackOptions
+{
+    /// <summary><c>None</c> (default) or <c>Automatic</c>. Automatic can send a document chosen for the local model to the cloud.</summary>
+    public string Mode { get; set; } = "None";
 }

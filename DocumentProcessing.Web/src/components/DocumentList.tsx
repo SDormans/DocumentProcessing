@@ -3,9 +3,13 @@ import { Link } from 'react-router-dom';
 import { DocumentListItem } from './DocumentListItem';
 import { xsrfHeaders } from '../csrf';
 
+export const PAGE_SIZE = 50;
+
 export const DocumentList: React.FC = () => {
   const [documents, setDocuments] = useState<DocumentSummaryDto[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -14,15 +18,36 @@ export const DocumentList: React.FC = () => {
     void loadDocuments();
   }, []);
 
+  const fetchPage = async (skip: number) => {
+    const response = await fetch(`/api/documents?skip=${skip}&take=${PAGE_SIZE}`, { credentials: 'same-origin' });
+    if (!response.ok) throw new Error('Could not load documents.');
+    const items = await response.json() as DocumentSummaryDto[];
+    const total = Number(response.headers.get('X-Total-Count'));
+    return { items, total: Number.isFinite(total) && total > 0 ? total : skip + items.length };
+  };
+
   const loadDocuments = async () => {
     try {
-      const response = await fetch('/api/documents', { credentials: 'same-origin' });
-      if (!response.ok) throw new Error('Could not load documents.');
-      setDocuments(await response.json() as DocumentSummaryDto[]);
+      const page = await fetchPage(0);
+      setDocuments(page.items);
+      setTotalCount(page.total);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Could not load documents.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMore = async () => {
+    setLoadingMore(true);
+    try {
+      const page = await fetchPage(documents.length);
+      setDocuments(current => [...current, ...page.items.filter(item => !current.some(doc => doc.id === item.id))]);
+      setTotalCount(page.total);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Could not load documents.');
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -84,6 +109,11 @@ export const DocumentList: React.FC = () => {
             </li>
           ))}
         </ul>
+      )}
+      {documents.length < totalCount && (
+        <button type="button" onClick={() => void loadMore()} disabled={loadingMore}>
+          {loadingMore ? 'Loading...' : `Show more (${documents.length} of ${totalCount})`}
+        </button>
       )}
     </div>
   );

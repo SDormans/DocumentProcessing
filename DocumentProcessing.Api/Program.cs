@@ -19,9 +19,10 @@ builder.Services
     .AddDocumentProcessing(builder.Configuration)
     .AddUploadLimits(builder.Configuration)
     .AddApiRateLimiting(builder.Configuration)
-    .AddApiAntiforgery(builder.Environment)
-    .AddCookieAuthentication(builder.Environment)
+    .AddApiAntiforgery(builder.Configuration, builder.Environment)
+    .AddCookieAuthentication(builder.Configuration, builder.Environment)
     .AddAuthorizationPolicies()
+    .AddTrustedForwardedHeaders(builder.Configuration)
     .AddPersistentDataProtection(builder.Configuration);
 
 builder.Services.AddControllers(options => options.Filters.Add<ValidateAntiforgeryOnUnsafeMethodsFilter>());
@@ -30,6 +31,8 @@ builder.Services.AddOpenApi();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 if (app.Environment.IsDevelopment())
 {

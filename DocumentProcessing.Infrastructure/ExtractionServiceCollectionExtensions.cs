@@ -1,6 +1,7 @@
 using DocumentProcessing.Application.Services.Invoice;
 using DocumentProcessing.Domain.Interfaces;
 using DocumentProcessing.Infrastructure.Ai;
+using DocumentProcessing.Infrastructure.Ocr;
 using DocumentProcessing.Infrastructure.TextExtraction;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,7 +16,11 @@ public static class ExtractionServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddInvoiceExtraction(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddScoped<IDocumentTextExtractor, PdfPigTextExtractor>();
+        services.Configure<OcrOptions>(configuration.GetSection(OcrOptions.SectionName));
+        services.AddSingleton<IOcrProvider, TesseractCliOcrProvider>();
+        services.AddSingleton<IPdfPageRenderer, PdftoppmPageRenderer>();
+        services.AddScoped<PdfPigTextExtractor>();
+        services.AddScoped<IDocumentTextExtractor, HybridPdfTextExtractor>();
         services.AddAiProvider(configuration);
         services.AddScoped<IInvoiceValidationRule>(_ => new MissingRequiredFieldsValidationRule());
         services.AddScoped<IInvoiceValidationRule, InvalidDateValidationRule>();
@@ -23,6 +28,7 @@ public static class ExtractionServiceCollectionExtensions
         services.AddScoped<IInvoiceValidationRule>(_ => new InconsistentInvoiceAmountsValidationRule());
         services.AddScoped<IInvoiceValidationRule, InconsistentInvoiceLinesValidationRule>();
         services.AddScoped<ValidationService>();
+        services.Configure<InvoiceExtractionOptions>(configuration.GetSection(InvoiceExtractionOptions.SectionName));
         services.AddScoped<IInvoiceExtractor, InvoiceExtractor>();
         return services;
     }

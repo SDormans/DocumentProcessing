@@ -16,6 +16,8 @@ namespace DocumentProcessing.Application.Services;
 /// </summary>
 public class DocumentReviewService : IDocumentReviewService
 {
+    public const int MaxReasonLength = 2_000;
+
     private readonly IDocumentRepository _documentRepository;
     private readonly IDocumentReviewRepository _reviewRepository;
     private readonly IFileStorage _fileStorage;
@@ -56,12 +58,14 @@ public class DocumentReviewService : IDocumentReviewService
 
         var invoiceResult = await _invoiceResultRepository.GetByDocumentIdAsync(documentId, cancellationToken);
 
-        var fields = MapInvoiceFields(invoiceResult);
+        var corrections = ReviewFields.Parse(review?.CorrectedValuesJson);
+        var approved = review?.Status == ReviewStatus.Approved ? ReviewFields.Parse(review.ApprovedValuesJson) : null;
+        var fields = MapInvoiceFields(invoiceResult, corrections, approved);
 
         var validationResults = new List<ValidationResultDto>();
         if (invoiceResult != null)
         {
-            var result = MapToInvoiceExtractionResult(invoiceResult);
+            var result = ReviewFields.Apply(MapToInvoiceExtractionResult(invoiceResult), corrections);
             await _validationService.ValidateAsync(result, cancellationToken);
             validationResults = _validationService.GetAllResults()
                 .Select(r => new ValidationResultDto
@@ -73,6 +77,8 @@ public class DocumentReviewService : IDocumentReviewService
                     AffectedFields = r.AffectedFields
                 })
                 .ToList();
+            if (invoiceResult.ErrorMessage is null)
+                validationResults.AddRange(ExtractionWarnings(invoiceResult.WarningsJson));
         }
 
         return new DocumentDetailDto
@@ -89,6 +95,10 @@ public class DocumentReviewService : IDocumentReviewService
             ReviewedAtUtc = review?.ReviewedAtUtc,
             ReviewDecision = review?.ReviewDecision,
             RejectionReason = review?.RejectionReason,
+            AiModelType = document.AiModelType.ToString(),
+            ProcessedWithModelType = invoiceResult?.AiModelType?.ToString(),
+            ProcessedWithModelName = invoiceResult?.ModelName,
+            FailureReason = document.Status == DocumentStatus.Failed ? invoiceResult?.ErrorMessage ?? "Processing failed. Retry the document or contact an administrator." : null,
             ContentUrl = $"/api/documents/{documentId}/content",
             ExtractedFields = fields,
             ValidationResults = validationResults
@@ -107,8 +117,7 @@ public class DocumentReviewService : IDocumentReviewService
             return NotFoundResponse(documentId, "Document niet gevonden.");
         }
 
-        var canReview = await CanReviewAsync(userId, cancellationToken);
-        if (!canReview)
+        if (!CanReview())
         {
             return ForbiddenResponse(documentId, "U heeft geen toestemming om dit document te corrigeren.");
         }
@@ -118,33 +127,43 @@ public class DocumentReviewService : IDocumentReviewService
             return NotReadyResponse(documentId, document.Status);
         }
 
-        var review = await GetOrCreateReviewAsync(documentId, cancellationToken);
-
         if (request.CorrectedValues == null || request.CorrectedValues.Count == 0)
         {
-            return new ReviewActionResponse
-            {
-                DocumentId = documentId,
-                ReviewStatus = review.Status.ToString(),
-                Success = false,
-                Message = "Geen correcties opgegeven."
-            };
+            return InvalidResponse(documentId, "Geen correcties opgegeven.");
         }
 
-        var correctedJson = JsonSerializer.Serialize(request.CorrectedValues);
-        review.SetCorrections(correctedJson, userId);
-
-        foreach (var kvp in request.CorrectedValues)
+        var inputErrors = ReviewFields.Validate(request.CorrectedValues);
+        if (inputErrors.Count > 0)
         {
+            return InvalidResponse(documentId, "De correcties zijn ongeldig.", inputErrors);
+        }
+
+        var review = await GetOrCreateReviewAsync(documentId, cancellationToken);
+        if (review.Status == ReviewStatus.Approved || review.Status == ReviewStatus.Rejected)
+        {
+            return AlreadyDecidedResponse(documentId, review.Status);
+        }
+
+        var invoiceResult = await _invoiceResultRepository.GetByDocumentIdAsync(documentId, cancellationToken);
+        var corrections = ReviewFields.Parse(review.CorrectedValuesJson);
+        var previousValues = EffectiveValues(invoiceResult, corrections);
+
+        foreach (var (fieldName, rawValue) in request.CorrectedValues)
+        {
+            var value = rawValue?.Trim() ?? string.Empty;
+            corrections[fieldName] = value;
+
             var entry = new ReviewAuditEntry(
                 Guid.NewGuid(),
                 review.Id,
                 userId,
                 userName,
                 "Correction");
-            entry.SetFieldDetails(kvp.Key, null, kvp.Value);
+            entry.SetFieldDetails(fieldName, previousValues.GetValueOrDefault(fieldName), value);
             await _reviewRepository.AddAuditEntryAsync(entry, cancellationToken);
         }
+
+        review.SetCorrections(JsonSerializer.Serialize(corrections), userId);
 
         document.MarkProcessed();
         await _reviewRepository.UpdateAsync(review, cancellationToken);
@@ -178,10 +197,14 @@ public class DocumentReviewService : IDocumentReviewService
             return NotFoundResponse(documentId, "Document niet gevonden.");
         }
 
-        var canApprove = await CanApproveOrRejectAsync(userId, cancellationToken);
-        if (!canApprove)
+        if (!CanApproveOrReject())
         {
             return ForbiddenResponse(documentId, "U heeft geen toestemming om dit document goed te keuren.");
+        }
+
+        if (request.Comment?.Length > MaxReasonLength)
+        {
+            return InvalidResponse(documentId, $"Een opmerking mag maximaal {MaxReasonLength} tekens zijn.");
         }
 
         if (document.Status != Domain.Entities.DocumentStatus.NeedsReview)
@@ -193,13 +216,7 @@ public class DocumentReviewService : IDocumentReviewService
 
         if (review.Status == ReviewStatus.Approved || review.Status == ReviewStatus.Rejected)
         {
-            return new ReviewActionResponse
-            {
-                DocumentId = documentId,
-                ReviewStatus = review.Status.ToString(),
-                Success = false,
-                Message = $"Document is al {review.Status} en kan niet opnieuw worden goedgekeurd."
-            };
+            return AlreadyDecidedResponse(documentId, review.Status);
         }
 
         var invoiceResult = await _invoiceResultRepository.GetByDocumentIdAsync(documentId, cancellationToken);
@@ -210,26 +227,25 @@ public class DocumentReviewService : IDocumentReviewService
                 DocumentId = documentId,
                 ReviewStatus = review.Status.ToString(),
                 Success = false,
-                Message = "Document kan niet worden goedgekeurd zonder extractieresultaat."
+                Message = "Document kan niet worden goedgekeurd zonder extractieresultaat.",
+                Error = ReviewActionError.Conflict
             };
         }
 
-        var result = MapToInvoiceExtractionResult(invoiceResult);
+        // Approval is judged on the values being approved: the extraction with the reviewer's corrections applied.
+        var corrections = ReviewFields.Parse(review.CorrectedValuesJson);
+        var result = ReviewFields.Apply(MapToInvoiceExtractionResult(invoiceResult), corrections);
         await _validationService.ValidateAsync(result, cancellationToken);
 
-        if (_validationService.HasCriticalErrors())
+        if (_validationService.HasErrorsOrCritical())
         {
-            return new ReviewActionResponse
-            {
-                DocumentId = documentId,
-                ReviewStatus = review.Status.ToString(),
-                Success = false,
-                Message = "Document kan niet worden goedgekeurd omdat er kritieke validatiefouten zijn."
-            };
+            var blocking = _validationService.GetErrors().Select(r => r.Message).ToList();
+            var invalid = InvalidResponse(documentId, "Document kan niet worden goedgekeurd zolang er validatiefouten zijn. Corrigeer de velden en probeer het opnieuw.", blocking);
+            invalid.ReviewStatus = review.Status.ToString();
+            return invalid;
         }
 
-        var approvedValuesJson = review.CorrectedValuesJson ?? review.OriginalAiOutputJson;
-        review.SetApproved(approvedValuesJson, userId);
+        review.SetApproved(JsonSerializer.Serialize(ReviewFields.ToValues(result)), userId);
 
         var entry = new ReviewAuditEntry(
             Guid.NewGuid(),
@@ -272,12 +288,11 @@ public class DocumentReviewService : IDocumentReviewService
     {
         if (string.IsNullOrWhiteSpace(request.Reason))
         {
-            return new ReviewActionResponse
-            {
-                DocumentId = documentId,
-                Success = false,
-                Message = "Een afwijsreden is verplicht."
-            };
+            return InvalidResponse(documentId, "Een afwijsreden is verplicht.");
+        }
+        if (request.Reason.Length > MaxReasonLength)
+        {
+            return InvalidResponse(documentId, $"Een afwijsreden mag maximaal {MaxReasonLength} tekens zijn.");
         }
 
         var document = await GetAccessibleDocumentAsync(documentId, cancellationToken);
@@ -286,8 +301,7 @@ public class DocumentReviewService : IDocumentReviewService
             return NotFoundResponse(documentId, "Document niet gevonden.");
         }
 
-        var canApprove = await CanApproveOrRejectAsync(userId, cancellationToken);
-        if (!canApprove)
+        if (!CanApproveOrReject())
         {
             return ForbiddenResponse(documentId, "U heeft geen toestemming om dit document af te wijzen.");
         }
@@ -301,16 +315,10 @@ public class DocumentReviewService : IDocumentReviewService
 
         if (review.Status == ReviewStatus.Approved || review.Status == ReviewStatus.Rejected)
         {
-            return new ReviewActionResponse
-            {
-                DocumentId = documentId,
-                ReviewStatus = review.Status.ToString(),
-                Success = false,
-                Message = $"Document is al {review.Status} en kan niet opnieuw worden afgewezen."
-            };
+            return AlreadyDecidedResponse(documentId, review.Status);
         }
 
-        review.SetRejected(request.Reason, userId);
+        review.SetRejected(request.Reason.Trim(), userId);
 
         var entry = new ReviewAuditEntry(
             Guid.NewGuid(),
@@ -322,7 +330,7 @@ public class DocumentReviewService : IDocumentReviewService
         await _reviewRepository.AddAuditEntryAsync(entry, cancellationToken);
 
         document.MarkProcessed();
-        document.UpdateStatus(Domain.Entities.DocumentStatus.Failed);
+        document.UpdateStatus(Domain.Entities.DocumentStatus.Rejected);
         await _reviewRepository.UpdateAsync(review, cancellationToken);
         await _documentRepository.UpdateAsync(document, cancellationToken);
         if (!await TrySaveAsync(documentId, cancellationToken))
@@ -344,12 +352,17 @@ public class DocumentReviewService : IDocumentReviewService
         };
     }
 
-    public async Task<IReadOnlyList<ReviewAuditEntryDto>> GetAuditLogAsync(
+    public async Task<IReadOnlyList<ReviewAuditEntryDto>?> GetAuditLogAsync(
         Guid documentId,
         CancellationToken cancellationToken = default)
     {
         var document = await GetAccessibleDocumentAsync(documentId, cancellationToken);
-        var review = document == null ? null : await _reviewRepository.GetByDocumentIdAsync(documentId, cancellationToken);
+        if (document == null)
+        {
+            return null;
+        }
+
+        var review = await _reviewRepository.GetByDocumentIdAsync(documentId, cancellationToken);
         if (review == null)
         {
             return new List<ReviewAuditEntryDto>();
@@ -369,15 +382,9 @@ public class DocumentReviewService : IDocumentReviewService
         }).OrderByDescending(e => e.CreatedAtUtc).ToList();
     }
 
-    public async Task<bool> CanReviewAsync(string userId, CancellationToken cancellationToken = default)
-    {
-        return !string.IsNullOrEmpty(userId);
-    }
+    public bool CanReview() => !string.IsNullOrEmpty(_currentUser.UserId);
 
-    public async Task<bool> CanApproveOrRejectAsync(string userId, CancellationToken cancellationToken = default)
-    {
-        return !string.IsNullOrEmpty(userId);
-    }
+    public bool CanApproveOrReject() => CanReview() && ReviewRoles.CanApproveOrReject.Any(_currentUser.IsInRole);
 
     /// <summary>
     /// Returns null both for missing documents and for documents the user may not see, so ids of other users' documents are not disclosed.
@@ -450,57 +457,111 @@ public class DocumentReviewService : IDocumentReviewService
     {
         DocumentId = documentId,
         Success = false,
-        Message = $"Document heeft status {status} en kan nu niet worden beoordeeld."
+        Message = $"Document heeft status {status} en kan nu niet worden beoordeeld.",
+        Error = ReviewActionError.Conflict
+    };
+
+    private static ReviewActionResponse AlreadyDecidedResponse(Guid documentId, ReviewStatus status) => new()
+    {
+        DocumentId = documentId,
+        ReviewStatus = status.ToString(),
+        Success = false,
+        Message = $"Document is al {status} en kan niet meer worden gewijzigd.",
+        Error = ReviewActionError.Conflict
     };
 
     private static ReviewActionResponse ConflictResponse(Guid documentId) => new()
     {
         DocumentId = documentId,
         Success = false,
-        Message = "Het document is tegelijkertijd door een andere gebruiker beoordeeld. Vernieuw de pagina en probeer het opnieuw."
+        Message = "Het document is tegelijkertijd door een andere gebruiker beoordeeld. Vernieuw de pagina en probeer het opnieuw.",
+        Error = ReviewActionError.Conflict
     };
 
-    private static ReviewActionResponse NotFoundResponse(Guid documentId, string message)
+    private static ReviewActionResponse InvalidResponse(Guid documentId, string message, IReadOnlyList<string>? errors = null) => new()
     {
-        return new ReviewActionResponse
-        {
-            DocumentId = documentId,
-            Success = false,
-            Message = message
-        };
-    }
+        DocumentId = documentId,
+        Success = false,
+        Message = message,
+        Errors = errors ?? Array.Empty<string>(),
+        Error = ReviewActionError.Invalid
+    };
 
-    private static ReviewActionResponse ForbiddenResponse(Guid documentId, string message)
+    private static ReviewActionResponse NotFoundResponse(Guid documentId, string message) => new()
     {
-        return new ReviewActionResponse
-        {
-            DocumentId = documentId,
-            Success = false,
-            Message = message
-        };
+        DocumentId = documentId,
+        Success = false,
+        Message = message,
+        Error = ReviewActionError.NotFound
+    };
+
+    private static ReviewActionResponse ForbiddenResponse(Guid documentId, string message) => new()
+    {
+        DocumentId = documentId,
+        Success = false,
+        Message = message,
+        Error = ReviewActionError.Forbidden
+    };
+
+    private static IReadOnlyDictionary<string, string?> EffectiveValues(
+        InvoiceExtractionResultEntity? invoiceResult,
+        IReadOnlyDictionary<string, string> corrections)
+    {
+        var result = invoiceResult != null ? MapToInvoiceExtractionResult(invoiceResult) : new InvoiceExtractionResult();
+        return ReviewFields.ToValues(ReviewFields.Apply(result, corrections));
     }
 
     private static IReadOnlyList<ExtractedFieldDto> MapInvoiceFields(
-        DocumentProcessing.Application.Services.Invoice.InvoiceExtractionResultEntity? invoiceResult)
+        InvoiceExtractionResultEntity? invoiceResult,
+        IReadOnlyDictionary<string, string> corrections,
+        IReadOnlyDictionary<string, string>? approved)
     {
         if (invoiceResult == null)
         {
             return new List<ExtractedFieldDto>();
         }
 
-        return new List<ExtractedFieldDto>
+        var extracted = ReviewFields.ToValues(MapToInvoiceExtractionResult(invoiceResult));
+        return ReviewFields.Names.Select(name => new ExtractedFieldDto
         {
-            new() { FieldName = "SupplierName", Value = invoiceResult.SupplierName, HasValue = invoiceResult.SupplierNameHasValue },
-            new() { FieldName = "InvoiceNumber", Value = invoiceResult.InvoiceNumber, HasValue = invoiceResult.InvoiceNumberHasValue },
-            new() { FieldName = "InvoiceDate", Value = invoiceResult.InvoiceDate?.ToString("yyyy-MM-dd"), HasValue = invoiceResult.InvoiceDateHasValue },
-            new() { FieldName = "DueDate", Value = invoiceResult.DueDate?.ToString("yyyy-MM-dd"), HasValue = invoiceResult.DueDateHasValue },
-            new() { FieldName = "Currency", Value = invoiceResult.Currency, HasValue = invoiceResult.CurrencyHasValue },
-            new() { FieldName = "Subtotal", Value = invoiceResult.Subtotal?.ToString("F2"), HasValue = invoiceResult.SubtotalHasValue },
-            new() { FieldName = "TaxAmount", Value = invoiceResult.TaxAmount?.ToString("F2"), HasValue = invoiceResult.TaxAmountHasValue },
-            new() { FieldName = "TotalAmount", Value = invoiceResult.TotalAmount?.ToString("F2"), HasValue = invoiceResult.TotalAmountHasValue },
-            new() { FieldName = "Lines", Value = invoiceResult.Lines, HasValue = invoiceResult.LinesHasValue }
-        };
+            FieldName = name,
+            Value = extracted[name],
+            HasValue = extracted[name] != null,
+            CorrectedValue = corrections.TryGetValue(name, out var corrected) ? corrected : null,
+            ApprovedValue = approved != null && approved.TryGetValue(name, out var approvedValue) ? NullIfEmpty(approvedValue) : null
+        }).ToList();
     }
+
+    /// <summary>
+    /// Warnings stored at extraction time (truncation, OCR, budget, fallback, model ambiguity notes). Stored copies of
+    /// validation findings are skipped: validation is re-run on the current values above.
+    /// </summary>
+    private static IEnumerable<ValidationResultDto> ExtractionWarnings(string? warningsJson)
+    {
+        if (string.IsNullOrWhiteSpace(warningsJson))
+            return [];
+        List<string>? warnings;
+        try
+        {
+            warnings = JsonSerializer.Deserialize<List<string>>(warningsJson);
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+        return (warnings ?? [])
+            .Where(w => !string.IsNullOrWhiteSpace(w) && !InvoiceExtractor.IsValidationWarning(w))
+            .Distinct()
+            .Select(w => new ValidationResultDto
+            {
+                RuleId = "ExtractionWarning",
+                Status = "Warning",
+                Severity = "Warning",
+                Message = w
+            });
+    }
+
+    private static string? NullIfEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;
 
     private static InvoiceExtractionResult MapToInvoiceExtractionResult(
         DocumentProcessing.Application.Services.Invoice.InvoiceExtractionResultEntity entity)
@@ -523,7 +584,7 @@ public class DocumentReviewService : IDocumentReviewService
             TaxAmountHasValue = entity.TaxAmountHasValue,
             TotalAmount = entity.TotalAmount,
             TotalAmountHasValue = entity.TotalAmountHasValue,
-            Lines = string.IsNullOrEmpty(entity.Lines) ? null : new List<string> { entity.Lines },
+            Lines = string.IsNullOrEmpty(entity.Lines) ? null : ReviewFields.SplitLines(entity.Lines),
             LinesHasValue = entity.LinesHasValue,
             RawResponse = entity.RawAiResponse,
             ExtractionMethod = entity.ExtractionMethod,

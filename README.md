@@ -2,7 +2,7 @@
 
 An ASP.NET Core and React platform for invoice PDFs: upload, queued background extraction (PDF text → LLM with a strict JSON schema → deterministic validation) and a human review UI.
 
-**Status:** the upload → queue → worker → extraction → review pipeline runs end to end in automated tests (Testcontainers + PostgreSQL) with the built-in fake AI provider. It has **not yet been run against a real LLM endpoint**, so there are no published accuracy numbers yet; the first scored run is milestone 2 on the [roadmap](docs/wiki/Roadmap.md). Known issues are listed in milestone 1 of the same roadmap. The sections below describe the current state, including limitations, so that demo results are not confused with live model output.
+**Status:** the upload → queue → worker → extraction → review pipeline runs end to end in automated tests (Testcontainers + PostgreSQL) with the built-in fake AI provider. It has **not yet been run against a real LLM endpoint**, so there are no published accuracy numbers yet; the first scored run is milestone 2 on the [roadmap](docs/wiki/Roadmap.md). Full documentation lives in the [project wiki](docs/wiki/README.md). The sections below describe the current state, including limitations, so that demo results are not confused with live model output.
 
 > **Project origin:** this project started as a demo for the **Accel Hackathon Paris** (commits from 21–22 October 2026). The state at the end of the hackathon is preserved as the [`hackathon-v0`](https://github.com/SDormans/DocumentProcessing/releases/tag/hackathon-v0) release and tag. Work after that point is being done deliberately in the open, as a portfolio project, and is tracked in the [changelog](CHANGELOG.md). See [Project history](#project-history).
 <!-- TODO: credit teammates here if the hackathon work was done as a team. -->
@@ -15,7 +15,7 @@ An ASP.NET Core and React platform for invoice PDFs: upload, queued background e
 |---|---|---|
 | Goal | Show an invoice-processing architecture in a hackathon demo | Turn the prototype into a working, measured, tested project |
 | Upload, storage, review UI | Working | Working |
-| AI extraction | Implemented, run by the worker | `InvoiceExtractor` extracts PDF text, calls an OpenAI-compatible Chat Completions endpoint with a strict JSON schema, then runs deterministic validation. Configured with `Ai:*`; `Ai:Provider=Fake` (default) needs no key. Uploads now create a queue command. |
+| AI extraction | Implemented, run by the worker | `InvoiceExtractor` extracts PDF text, calls the chosen AI model with a strict JSON schema, then runs deterministic validation. Configured with `Ai:*`; the default `Fake` provider needs no key. Users choose a cloud (OpenAI, Azure OpenAI, Anthropic) or local (Ollama, llama.cpp) model; see [Cloud or local AI model](#cloud-or-local-ai-model). Uploads now create a queue command. |
 | Evaluation | Harness and 50-invoice synthetic corpus, no model results | Planned: published scorecard with accuracy, latency and cost per invoice |
 | Integration tests | Controller-level, mocked | Real API host and PostgreSQL via Testcontainers: migrations, auth, upload → extraction → review |
 | Background processing | Implemented | `DocumentProcessing.Worker` claims `QueueCommands` with a lease (`FOR UPDATE SKIP LOCKED`), runs extraction and validation, stores the result and moves the document to `NeedsReview`. Retries are bounded with exponential backoff. See [ADR 0001](./docs/adr/0001-database-backed-queue.md). |
@@ -31,6 +31,7 @@ Everything in the right-hand column marked "Planned" is not done yet. This READM
 - File size, extension, supported MIME type (`application/pdf` or generic `application/octet-stream`), and `%PDF-` signature checks.
 - PostgreSQL persistence, EF Core migrations, and local or Azure Blob file storage.
 - A React review interface with correction and approve/reject API calls.
+- A per-user choice between a cloud and a local AI model, saved on the account, with startup validation of the AI settings and a retry-with-the-other-model option for failed documents.
 - A deterministic, synthetic 50-invoice ground-truth corpus and a prediction scoring harness.
 - Testcontainers integration tests against a real PostgreSQL, and a CI workflow that builds, tests and builds all container images.
 - Local Docker Compose configuration for PostgreSQL, API, worker, and web UI.
@@ -63,13 +64,14 @@ Synthetic corpus ──► prediction JSONL ──► evaluation report
 | `DocumentProcessing.IntegrationTests` | Tests against the real API host and a PostgreSQL container (Testcontainers): migrations, auth, upload → extraction → review. |
 | `tools/evaluation` | Synthetic dataset generator and JSONL prediction evaluator. |
 
-The API persists uploaded documents, stages a queue command with each upload, and exposes review endpoints. The worker processes queued documents (see [ADR 0001](./docs/adr/0001-database-backed-queue.md)). `InvoiceExtractor` calls an OpenAI-compatible Chat Completions endpoint selected with `Ai:Provider=OpenAi`; the default `Ai:Provider=Fake` needs no key but returns empty fields. The real provider path has not been exercised against a live endpoint yet, and OCR for scanned PDFs is not wired into the worker image.
+The API persists uploaded documents, stages a queue command with each upload, and exposes review endpoints. The worker processes queued documents (see [ADR 0001](./docs/adr/0001-database-backed-queue.md)). `InvoiceExtractor` asks `IAiProviderRegistry` for the cloud or local model recorded on the document and never depends on a specific vendor ([ADR 0007](./docs/adr/0007-cloud-and-local-models.md)). The default `Fake` provider needs no key but returns empty fields. The real provider paths have not been exercised against a live endpoint yet. Scanned PDFs are read with Tesseract OCR in the worker image.
 
 ## Requirements
 
 - .NET 10 SDK for local builds and tests.
 - Node.js 24+ and npm for the web app and evaluation scripts.
 - Docker Engine with the Docker Compose plugin for the containerized demo.
+- Optional, for OCR of scanned PDFs when running the worker outside Docker: Tesseract (`tesseract`, with the `eng` and `nld` language data) and Poppler (`pdftoppm`) on `PATH`. The Compose `worker` image already includes them, so Tesseract is not a separate Compose service. Without them, the worker skips OCR with a warning and scanned PDFs fail with no text.
 
 ## Start the local Docker demo
 
@@ -108,7 +110,51 @@ The API persists uploaded documents, stages a queue command with each upload, an
 
    To remove the local database and uploaded files as well, explicitly remove the named volumes with `docker compose down --volumes`. This permanently deletes the local demo data.
 
-With the default fake provider, the uploaded document is picked up by the worker and moves to `NeedsReview` with empty extracted fields, because the fake provider does not extract anything. Real extraction needs `Ai:Provider=OpenAi` and a key (not yet run; see the roadmap). The JSONL ground truth is not an extraction result.
+With the default fake provider, the uploaded document is picked up by the worker and moves to `NeedsReview` with empty extracted fields, because the fake provider does not extract anything. Real extraction needs a cloud model with a key or a local model (not yet run against a live endpoint; see the roadmap). The JSONL ground truth is not an extraction result.
+
+## Cloud or local AI model
+
+Each user picks the model for their uploads in the **AI model for new uploads** dropdown in the page header:
+
+- **Cloud:** a hosted API: OpenAI, Azure OpenAI or Anthropic (Claude).
+- **Local:** a runtime on your own machine or network: Ollama, a llama.cpp `llama-server`, or any other OpenAI-compatible server. Invoice text does not leave your infrastructure.
+
+The choice is saved on the user's account, so it survives signing out and applies on every device. Each upload records the model it was made with, and the worker uses that model; changing the dropdown does not affect documents already queued. Models that are not configured are shown as "not configured", and the dropdown warns when the chosen model is unreachable, its API key is rejected, or a local model is not installed.
+
+**Configure** the models in `.env` (Docker) or under `Ai:*` (`appsettings`). The API and the worker need the same settings:
+
+| `.env` variable | Setting | Meaning |
+|---|---|---|
+| `AI_PROVIDER`, `AI_ENDPOINT`, `AI_API_KEY`, `AI_MODEL` | `Ai:Cloud:*` | Cloud model: `Fake` (default), `OpenAI`, `Anthropic` or `None` |
+| `AI_LOCAL_PROVIDER`, `AI_LOCAL_ENDPOINT`, `AI_LOCAL_MODEL` | `Ai:Local:*` | Local model: `None` (default, hidden), `OpenAI` (any OpenAI-compatible server) or `Fake` |
+| `AI_LOCAL_ATTEMPT_TIMEOUT_SECONDS`, `AI_LOCAL_TOTAL_TIMEOUT_SECONDS` | `Ai:Local:AttemptTimeoutSeconds`, `Ai:Local:TotalTimeoutSeconds` | Per-request and overall timeout for the local model (`60` / `180`) |
+| `LLAMA_MODEL_FILE`, `LLAMA_CTX_SIZE`, `LLAMACPP_PORT` | `llamacpp` service | `.gguf` file in `models/`, context size (`8192`), host port (`8082`) |
+| `AI_DEFAULT_MODEL_TYPE` | `Ai:DefaultModelType` | `Cloud` (default) or `Local`, for users who have not chosen |
+| `AI_FALLBACK_MODE` | `Ai:Fallback:Mode` | `None` (default) or `Automatic`; see below |
+
+Invalid settings stop the API and worker at startup with one message listing every problem, for example `Invalid AI configuration: Ai:Cloud:ApiKey is required for provider 'OpenAI'.` The older flat `Ai:Provider`/`Ai:ApiKey`/`Ai:ModelName` keys still work and configure the cloud model.
+
+**Try a local model with Ollama:**
+
+```powershell
+docker compose --profile local-llm up -d ollama
+docker compose exec ollama ollama pull llama3.1:8b
+```
+
+Set `AI_LOCAL_PROVIDER=OpenAI`, `AI_LOCAL_ENDPOINT=http://ollama:11434/v1/` and `AI_LOCAL_MODEL=llama3.1:8b` in `.env`, then `docker compose up -d api worker`. Score a local model with the evaluation tooling before relying on it; small models are usually less accurate than hosted ones.
+
+**Use a model file in the repo:** put a `.gguf` file in [`models/`](models/README.md) (git-ignored), set `LLAMA_MODEL_FILE=<file>.gguf`, `AI_LOCAL_PROVIDER=OpenAI`, `AI_LOCAL_ENDPOINT=http://llamacpp:8080/v1/` and `AI_LOCAL_MODEL=local-model` in `.env`, then run `docker compose --profile llamacpp up -d`. llama.cpp serves it on the CPU, so this works the same on macOS, Linux and Windows.
+
+**Use a runtime already on your machine** (Ollama, LM Studio, `llama-server`): set `AI_LOCAL_ENDPOINT=http://host.docker.internal:<port>/v1/` and `AI_LOCAL_MODEL` to a model it serves. The API and worker containers map `host.docker.internal` on every OS. The runtime must listen on all interfaces, not only `127.0.0.1` (Ollama: `OLLAMA_HOST=0.0.0.0`).
+
+Local models on a CPU can take minutes per invoice; raise `AI_LOCAL_ATTEMPT_TIMEOUT_SECONDS` and `AI_LOCAL_TOTAL_TIMEOUT_SECONDS` if extractions time out.
+
+**When the chosen model fails:**
+
+- With `AI_FALLBACK_MODE=None` (default), the document is retried with the same model up to `QueueProcessing:MaxAttempts`. It then shows as `Failed`, with the reason and a button to switch to the other model and retry (`POST /api/documents/{id}/retry-with-model`). No document is sent to another model without the user's action.
+- With `AI_FALLBACK_MODE=Automatic`, the other configured model is tried immediately, and the result carries a warning naming the model that processed it. Only enable this if documents chosen for the local model may be sent to the cloud.
+
+Full reference: [Configuration](docs/wiki/Configuration.md#cloud-and-local-models).
 
 ### Run the API without Docker
 
@@ -121,7 +167,10 @@ $env:Authentication__Bootstrap__Username = "demo-admin"
 $env:Authentication__Bootstrap__Password = "REPLACE_WITH_A_UNIQUE_PASSWORD"
 $env:Authentication__Bootstrap__Email = "demo-admin@example.invalid"
 dotnet run --project DocumentProcessing.Api
+dotnet run --project DocumentProcessing.Worker   # same shell: needs the same connection string
 ```
+
+The worker exits with `ConnectionStrings:DefaultConnection is required` when no connection string is set. Besides the environment variable, it reads `dotnet user-secrets` (`--project DocumentProcessing.Worker`) and a git-ignored `DocumentProcessing.Worker/appsettings.Development.json` (template: `appsettings.Development.example.json`); see [Getting Started](docs/wiki/Getting-Started.md#run-the-api-without-docker).
 
 Users are stored with ASP.NET Core Identity in PostgreSQL (`AspNetUsers`/`AspNetRoles` tables). On startup the API applies migrations, ensures the `Admin` and `Reviewer` roles exist, and creates the bootstrap user only if it does not exist yet; changing the bootstrap variables later does not modify an existing account. Additional users are created by an administrator through `POST /api/auth/register`.
 
@@ -174,6 +223,7 @@ The evaluator consumes one prediction JSON object per line. Each record must inc
 - `id`: an ID from the dataset.
 - `success`, `valid`, `requiresHumanReview`: boolean outcomes.
 - `fields`: all nine keys `invoiceNumber`, `supplierName`, `invoiceDate`, `dueDate`, `currency`, `subtotal`, `taxAmount`, `totalAmount`, and `lineItems`. Use `null` for a missing field.
+- Optional `unscoredFields`: field names the model cannot produce; they are left out of the accuracy instead of counting as missing.
 - Optional non-negative telemetry: `durationMs`, `ocrDurationMs`, `inferenceDurationMs`, `queueWaitMs`, `retryCount`, and `aiCostUsd`.
 
 Run the scorecard with:
@@ -197,7 +247,7 @@ Running `npm run evaluate` against dataset version 1.0.0 with no prediction file
 | Schema failure, invalid extraction, and review rates | Not available |
 | Processing duration, retries, and estimated AI cost | Not available |
 
-These are evaluation-harness coverage results, **not** model-accuracy measurements. No live extraction results are available because the extractor and external AI integration are incomplete. The harness tests use controlled in-memory examples to verify scoring logic; those test fixtures are not benchmark results.
+These are evaluation-harness coverage results, **not** model-accuracy measurements. No live extraction results are available yet because the extractor has only run with the Fake provider; scoring a real model is milestone 2 on the [roadmap](docs/wiki/Roadmap.md). The harness tests use controlled in-memory examples to verify scoring logic; those test fixtures are not benchmark results.
 
 ## Security and operational boundaries
 
@@ -205,9 +255,9 @@ Implemented controls:
 
 - All document and review endpoints require an authenticated user; the upload endpoint is not anonymous.
 - Role policies guard review decisions and administrative account creation on the server.
-- Login uses a rate limit, consistent 401/403 cookie responses, HttpOnly cookies, SameSite=Lax, and Secure cookies outside Development.
+- Login uses a rate limit, consistent 401/403 cookie responses, HttpOnly cookies, SameSite=Lax, and Secure cookies outside Development (override with `Authentication:CookieSecurePolicy`). Compose runs the API and worker in Production with `SameAsRequest` (Secure cookies over HTTPS).
 - Rate limits (fixed window, `429` with `Retry-After`): login 5/min per client IP, uploads 20/min per signed-in user. Both are configurable under `RateLimiting:Login` and `RateLimiting:Upload` (`PermitLimit`, `Period`).
-- Anti-forgery tokens on every cookie-authenticated `POST`/`PUT`/`PATCH`/`DELETE` (double-submit). Signing in and `GET /api/auth/me` issue a readable `XSRF-TOKEN` cookie bound to the user. The SPA sends it back in the `X-XSRF-TOKEN` header, and requests without a valid token get `400`. Only login and logout are exempt: there is no token before signing in, and JSON-only bodies without CORS already block cross-site login posts.
+- Anti-forgery tokens on every cookie-authenticated `POST`/`PUT`/`PATCH`/`DELETE` (double-submit). Signing in and `GET /api/auth/me` issue a readable `XSRF-TOKEN` cookie bound to the user. The SPA sends it back in the `X-XSRF-TOKEN` header, and requests without a valid token get `400`. Only login is exempt: there is no token before signing in, and JSON-only bodies without CORS already block cross-site login posts.
 - Accounts use ASP.NET Core Identity: hashed passwords, a 12-character minimum length, and a 15-minute lockout after 5 failed logins. There are no default accounts; the bootstrap account must be configured explicitly.
 - The API limits PDF size, checks extension/MIME/signature, replaces user filenames with generated internal storage keys, removes path components from displayed filenames, and keeps filesystem paths out of API DTOs and routine logs.
 - Storage key path resolution rejects traversal. Storage errors return a generic client response.
@@ -243,10 +293,13 @@ GitHub Actions is configured in [`.github/workflows/ci.yml`](./.github/workflows
 ## Troubleshooting
 
 - **Compose asks for environment variables:** copy `.env.example` to `.env` and replace the placeholder passwords.
+- **API exits with `Could not connect to PostgreSQL at <host>:<port>`:** PostgreSQL is not running or not listening on that address. Start it (`docker compose up -d postgres`) and check `ConnectionStrings:DefaultConnection`; the API retries `Database:ConnectAttempts` times (default 10, 3 s apart) before giving up.
 - **Database readiness stays unhealthy:** inspect `docker compose logs postgres`; confirm the configured database/user/password and ensure local port 5432 is available.
 - **API container exits during startup:** inspect `docker compose logs api`. The API requires the PostgreSQL health check and complete bootstrap username/password settings.
 - **Login fails for the bootstrap user:** the account is only created when it does not exist yet. If the database volume already contains the user, the existing password still applies; reset the volume (`docker compose down -v`) to re-seed in a demo environment.
 - **PDF upload returns 413/415/400:** check the configured upload limit, `.pdf` extension, supported MIME type, and actual PDF signature.
 - **The document remains `Queued`:** check that the `worker` service is running (`docker compose logs worker`). Failed commands record `LastErrorCategory` in `QueueCommands`.
 - **Evaluation accuracy is `null`:** no prediction JSONL was supplied. This is intentional; the tool does not fabricate predictions or metrics.
+- **Document `Failed` because the AI model could not be reached:** the reason is shown on the document page. Check the warning under the model dropdown, start the local runtime or run `ollama pull <model>`, then retry with the same model or switch to the other one.
+- **Startup fails with `Invalid AI configuration`:** the message names every wrong `Ai:*` setting; fix them in `.env` or `appsettings`.
 - **OCR/AI failures:** documents without extractable text, and AI responses that are rejected, refused or violate the schema, fail without a retry. Timeouts and HTTP errors are retried up to `QueueProcessing:MaxAttempts`.

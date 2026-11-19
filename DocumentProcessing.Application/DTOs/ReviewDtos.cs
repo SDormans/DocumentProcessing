@@ -48,8 +48,13 @@ public class ExtractedFieldDto
     public bool HasValue { get; set; }
     public string? CorrectedValue { get; set; }
     public string? ApprovedValue { get; set; }
-    public bool IsCorrected => !string.Equals(Value, CorrectedValue, StringComparison.OrdinalIgnoreCase);
-    public bool IsApproved => !string.IsNullOrEmpty(ApprovedValue);
+    public bool IsCorrected => CorrectedValue != null && !string.Equals(Value, CorrectedValue, StringComparison.Ordinal);
+    public bool IsApproved => ApprovedValue != null;
+
+    /// <summary>
+    /// The value the review currently stands on: approved, else corrected, else extracted.
+    /// </summary>
+    public string? EffectiveValue => ApprovedValue ?? CorrectedValue ?? Value;
 
     /// <summary>
     /// Pagina in het PDF-document waar de waarde vandaan komt (indien beschikbaar).
@@ -97,6 +102,16 @@ public class DocumentDetailDto
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? LastProcessedAtUtc { get; set; }
+
+    /// <summary>Model type chosen for this document (<c>Cloud</c> or <c>Local</c>).</summary>
+    public string AiModelType { get; set; } = string.Empty;
+
+    /// <summary>Model type and name that produced the latest result, after any fallback.</summary>
+    public string? ProcessedWithModelType { get; set; }
+    public string? ProcessedWithModelName { get; set; }
+
+    /// <summary>Why processing failed, when <see cref="Status"/> is <c>Failed</c>.</summary>
+    public string? FailureReason { get; set; }
 
     public string ReviewStatus { get; set; } = string.Empty;
     public string? ReviewedBy { get; set; }
@@ -152,6 +167,26 @@ public class ReviewActionResponse
     public DateTime? ReviewedAtUtc { get; set; }
     public bool Success { get; set; }
     public string? Message { get; set; }
+
+    /// <summary>
+    /// Why the action failed; the API maps it to the HTTP status code.
+    /// </summary>
+    [JsonIgnore]
+    public ReviewActionError Error { get; set; }
+
+    /// <summary>
+    /// Validation failures that blocked the action (invalid corrections or blocking validation results on approval).
+    /// </summary>
+    public IReadOnlyList<string> Errors { get; set; } = Array.Empty<string>();
+}
+
+public enum ReviewActionError
+{
+    None,
+    Invalid,
+    NotFound,
+    Forbidden,
+    Conflict
 }
 
 /// <summary>

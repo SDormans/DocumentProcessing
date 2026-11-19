@@ -13,7 +13,7 @@ public static class AntiforgerySetup
     public const string RequestTokenCookieName = "XSRF-TOKEN";
     public const string CookieName = "DocumentProcessing.Antiforgery";
 
-    public static IServiceCollection AddApiAntiforgery(this IServiceCollection services, IHostEnvironment environment)
+    public static IServiceCollection AddApiAntiforgery(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
         services.AddAntiforgery(options =>
         {
@@ -21,7 +21,7 @@ public static class AntiforgerySetup
             options.Cookie.Name = CookieName;
             options.Cookie.HttpOnly = true;
             options.Cookie.SameSite = SameSiteMode.Strict;
-            options.Cookie.SecurePolicy = environment.IsDevelopment() ? CookieSecurePolicy.None : CookieSecurePolicy.Always;
+            options.Cookie.SecurePolicy = AuthSetup.GetCookieSecurePolicy(configuration, environment);
         });
         return services;
     }

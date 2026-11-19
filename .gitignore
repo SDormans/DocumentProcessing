@@ -62,6 +62,10 @@ secrets/
 *.ldf
 *.edmx
 
+# Local LLM model files (docker compose --profile llamacpp)
+/models/*
+!/models/README.md
+
 # Uploaded documents and generated artifacts
 /data/
 /storage/
@@ -84,4 +88,11 @@ DocumentProcessing.Api/data/
 Thumbs.db
 
 # dotnet tool manifest
-.config/DocumentProcessing.Web/*.tsbuildinfo
+.config/
+DocumentProcessing.Web/*.tsbuildinfo
+# Playwright
+DocumentProcessing.Web/test-results/
+DocumentProcessing.Web/playwright-report/
+
+# Test fixtures are committed on purpose.
+!DocumentProcessing.UnitTests/Fixtures/*.pdf

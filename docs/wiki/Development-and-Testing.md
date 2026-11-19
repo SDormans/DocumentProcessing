@@ -21,7 +21,18 @@ CI (`.github/workflows/ci.yml`) runs all of these, then builds the three images.
 | `DocumentProcessing.IntegrationTests` | The real API host (`WebApplicationFactory`) against PostgreSQL in Testcontainers (`postgres:16-alpine`) | One database per test class. Covers the migration baseline, sign-in, roles, anti-forgery, ownership, and upload → extraction → correction → approval. The queue is drained with `QueueCommandProcessor` and the Fake AI provider |
 | `tools/evaluation/*.test.mjs` | Dataset invariants, scoring maths | `node --test` |
 
-There are no front-end tests yet ([Roadmap](Roadmap.md)).
+| `DocumentProcessing.Web/src/**/*.test.tsx` | Review components | Vitest + Testing Library (`happy-dom`); `npm --prefix DocumentProcessing.Web test` |
+| `DocumentProcessing.Web/e2e` | Browser smoke test: sign in → upload a 2 MB PDF through Nginx → wait for `NeedsReview` → correct → reload → approve | Playwright against a running Compose stack; the `e2e` CI job runs it |
+
+Run the browser smoke test locally:
+
+```bash
+docker compose up -d --build --wait
+cd DocumentProcessing.Web
+npx playwright install chromium
+set -a; . ../.env; set +a
+E2E_BASE_URL=http://127.0.0.1:${WEB_PORT:-8081} E2E_USERNAME=$DEMO_ADMIN_USERNAME E2E_PASSWORD=$DEMO_ADMIN_PASSWORD npm run e2e
+```
 
 ## Front end
 
@@ -53,4 +64,4 @@ Vite proxies `/api` and `/health` to `API_BASE_URL`, which defaults to `http://l
 
 ## Adding an AI provider
 
-Implement `IAiProvider` in `DocumentProcessing.Infrastructure/Ai`, add a branch in `AiServiceCollectionExtensions` keyed on `Ai:Provider`, and emit the same `ai.*` metrics.
+Implement `IAiProvider` in `DocumentProcessing.Infrastructure/Ai`, add its name to the provider validation in `ValidatedAiSettings` and a case in `AiServiceCollectionExtensions.AddAiProvider` (one keyed registration per model type), and emit the same `ai.*` metrics. `InvoiceExtractor` and the worker need no changes ([ADR 0007](../adr/0007-cloud-and-local-models.md)).

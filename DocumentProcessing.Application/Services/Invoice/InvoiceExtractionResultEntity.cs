@@ -35,6 +35,8 @@ public class InvoiceExtractionResultEntity
     public string? Lines { get; set; }
     public bool LinesHasValue { get; set; }
     public string? WarningsJson { get; set; }
+    public DocumentProcessing.Domain.Enums.AiModelType? AiModelType { get; set; }
+    public string? ModelName { get; set; }
     public DateTime ExtractedAtUtc { get; set; } = DateTime.UtcNow;
 
     // Navigation

@@ -1,4 +1,5 @@
 using System;
+using DocumentProcessing.Domain.Enums;
 
 namespace DocumentProcessing.Domain.Entities;
 
@@ -9,7 +10,9 @@ public enum DocumentStatus
     Processing,
     NeedsReview,
     Completed,
-    Failed
+    Failed,
+    // Stored as an integer: append new values, never reorder.
+    Rejected
 }
 
 public class Document
@@ -61,6 +64,11 @@ public class Document
     /// </summary>
     public DateTime? LastProcessedAtUtc { get; private set; }
 
+    /// <summary>
+    /// The model type the uploader chose. The worker extracts with this model unless fallback is enabled.
+    /// </summary>
+    public AiModelType AiModelType { get; private set; } = AiModelType.Cloud;
+
     public static Document Create(
         string originalFileName,
         string contentType,
@@ -96,6 +104,13 @@ public class Document
         Status = newStatus;
     }
 
+    public void SelectAiModel(AiModelType modelType)
+    {
+        if (!Enum.IsDefined(modelType))
+            throw new ArgumentOutOfRangeException(nameof(modelType), modelType, "Unknown AI model type.");
+        AiModelType = modelType;
+    }
+
     public void MarkProcessed()
     {
         LastProcessedAtUtc = DateTime.UtcNow;
@@ -116,8 +131,9 @@ public class Document
 
         (DocumentStatus.NeedsReview, DocumentStatus.Completed) => true,
         (DocumentStatus.NeedsReview, DocumentStatus.Failed) => true,
+        (DocumentStatus.NeedsReview, DocumentStatus.Rejected) => true,
 
-        // Allow reprocessing retry from Failed
+        // Failed documents can be retried; Rejected is final.
         (DocumentStatus.Failed, DocumentStatus.Queued) => true,
         (DocumentStatus.Failed, DocumentStatus.Processing) => true,
 

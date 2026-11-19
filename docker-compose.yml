@@ -26,8 +26,12 @@ services:
       context: .
       dockerfile: DocumentProcessing.Api/Dockerfile
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       ASPNETCORE_URLS: http://+:8080
+      # Behind the web container's Nginx on a private Docker network; HTTPS ends at Nginx or an ingress.
+      ForwardedHeaders__KnownNetworks__0: ${FORWARDED_HEADERS_KNOWN_NETWORK:-172.16.0.0/12}
+      # Secure cookies whenever the client connection is HTTPS (X-Forwarded-Proto from Nginx); plain HTTP on localhost still works.
+      Authentication__CookieSecurePolicy: ${COOKIE_SECURE_POLICY:-SameAsRequest}
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-documentprocessing};Username=${APP_DB_USER:-documentprocessing_app};Password=${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
       FileStorage__BasePath: /app/data/storage
       FileStorage__Provider: ${FILE_STORAGE_PROVIDER:-Local}
@@ -37,12 +41,28 @@ services:
       FileStorage__AzureBlob__ContainerName: ${AZURE_BLOB_CONTAINER:-documents}
       FileStorage__AzureBlob__CreateContainerIfNotExists: ${AZURE_BLOB_CREATE_CONTAINER:-false}
       DocumentService__MaxFileSizeBytes: ${MAX_FILE_SIZE_BYTES:-10485760}
+      # Same AI settings as the worker: the API offers, validates and probes the models users can choose.
+      Ai__Provider: ${AI_PROVIDER:-Fake}
+      Ai__Endpoint: ${AI_ENDPOINT:-https://api.openai.com/v1/}
+      Ai__ApiKey: ${AI_API_KEY:-}
+      Ai__ModelName: ${AI_MODEL:-gpt-4o-mini}
+      Ai__Local__Provider: ${AI_LOCAL_PROVIDER:-None}
+      Ai__Local__Endpoint: ${AI_LOCAL_ENDPOINT:-http://ollama:11434/v1/}
+      Ai__Local__ModelName: ${AI_LOCAL_MODEL:-llama3.1:8b}
+      Ai__Local__AttemptTimeoutSeconds: ${AI_LOCAL_ATTEMPT_TIMEOUT_SECONDS:-60}
+      Ai__Local__TotalTimeoutSeconds: ${AI_LOCAL_TOTAL_TIMEOUT_SECONDS:-180}
+      Ai__DefaultModelType: ${AI_DEFAULT_MODEL_TYPE:-Cloud}
+      Ai__Fallback__Mode: ${AI_FALLBACK_MODE:-None}
       Authentication__Bootstrap__Username: ${DEMO_ADMIN_USERNAME:?Set DEMO_ADMIN_USERNAME in .env}
       Authentication__Bootstrap__Password: ${DEMO_ADMIN_PASSWORD:?Set DEMO_ADMIN_PASSWORD in .env}
       Authentication__Bootstrap__Email: ${DEMO_ADMIN_EMAIL:-demo-admin@example.invalid}
       Authentication__Bootstrap__Role: Admin
       Logging__Console__FormatterName: ${LOG_FORMAT:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    # Lets the containers reach a model runtime on your own machine (Ollama, LM Studio, llama-server) at
+    # http://host.docker.internal:<port>/v1/. Docker Desktop (Mac, Windows) provides the name; Linux needs this mapping.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,7 +83,7 @@ services:
       context: .
       dockerfile: DocumentProcessing.Worker/Dockerfile
     environment:
-      DOTNET_ENVIRONMENT: Development
+      DOTNET_ENVIRONMENT: ${DOTNET_ENVIRONMENT:-Production}
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-documentprocessing};Username=${APP_DB_USER:-documentprocessing_app};Password=${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
       FileStorage__BasePath: /app/data/storage
       FileStorage__Provider: ${FILE_STORAGE_PROVIDER:-Local}
@@ -76,8 +96,21 @@ services:
       Ai__Endpoint: ${AI_ENDPOINT:-https://api.openai.com/v1/}
       Ai__ApiKey: ${AI_API_KEY:-}
       Ai__ModelName: ${AI_MODEL:-gpt-4o-mini}
+      Ai__Local__Provider: ${AI_LOCAL_PROVIDER:-None}
+      Ai__Local__Endpoint: ${AI_LOCAL_ENDPOINT:-http://ollama:11434/v1/}
+      Ai__Local__ModelName: ${AI_LOCAL_MODEL:-llama3.1:8b}
+      Ai__Local__AttemptTimeoutSeconds: ${AI_LOCAL_ATTEMPT_TIMEOUT_SECONDS:-60}
+      Ai__Local__TotalTimeoutSeconds: ${AI_LOCAL_TOTAL_TIMEOUT_SECONDS:-180}
+      Ai__DefaultModelType: ${AI_DEFAULT_MODEL_TYPE:-Cloud}
+      Ai__Fallback__Mode: ${AI_FALLBACK_MODE:-None}
       Logging__Console__FormatterName: ${LOG_FORMAT:-}
+      # The worker polls the queue every few seconds; don't log each SQL command.
+      Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: ${WORKER_SQL_LOG_LEVEL:-Warning}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    # Lets the containers reach a model runtime on your own machine (Ollama, LM Studio, llama-server) at
+    # http://host.docker.internal:<port>/v1/. Docker Desktop (Mac, Windows) provides the name; Linux needs this mapping.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       # The API applies migrations on startup; wait for it before polling the queue.
       api:
@@ -90,6 +123,9 @@ services:
     build:
       context: DocumentProcessing.Web
       dockerfile: Dockerfile
+    environment:
+      # Keep above MAX_FILE_SIZE_BYTES + 128 KiB multipart overhead.
+      CLIENT_MAX_BODY_SIZE: ${CLIENT_MAX_BODY_SIZE:-11m}
     depends_on:
       api:
         condition: service_healthy
@@ -97,7 +133,42 @@ services:
       - "127.0.0.1:${WEB_PORT:-8081}:8080"
     restart: unless-stopped
 
+  # Optional local LLM runtime: docker compose --profile local-llm up -d ollama
+  ollama:
+    image: ollama/ollama:0.12.6
+    profiles: ["local-llm"]
+    volumes:
+      - ollama_models:/root/.ollama
+    ports:
+      - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"
+    restart: unless-stopped
+
+  # Optional local LLM from a model file in ./models: docker compose --profile llamacpp up -d llamacpp
+  llamacpp:
+    image: ghcr.io/ggml-org/llama.cpp:server-b12464
+    profiles: ["llamacpp"]
+    environment:
+      LLAMA_ARG_MODEL: /models/${LLAMA_MODEL_FILE:-model.gguf}
+      # The name the app asks for (AI_LOCAL_MODEL, same default as the API and worker), so the availability check finds the model.
+      LLAMA_ARG_ALIAS: ${AI_LOCAL_MODEL:-llama3.1:8b}
+      LLAMA_ARG_CTX_SIZE: ${LLAMA_CTX_SIZE:-8192}
+      LLAMA_ARG_HOST: 0.0.0.0
+      LLAMA_ARG_PORT: 8080
+    volumes:
+      - ./models:/models:ro
+    ports:
+      - "127.0.0.1:${LLAMACPP_PORT:-8082}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
 volumes:
+  ollama_models:
+    name: documentprocessing_ollama_models
   postgres_demo_data:
     name: documentprocessing_demo_postgres_data
   document_storage_demo:

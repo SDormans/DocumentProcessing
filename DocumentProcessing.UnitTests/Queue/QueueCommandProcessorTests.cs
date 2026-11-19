@@ -200,4 +200,51 @@ public class QueueCommandProcessorTests : IDisposable
         await using var verify = OtherWorkerContext();
         (await verify.QueueCommands.SingleAsync(c => c.Id == command.Id)).Status.Should().Be(QueueCommandStatus.Completed);
     }
+
+    [Fact]
+    public async Task LongExtraction_RenewsLeaseUntilDone()
+    {
+        var (document, command) = await SeedAsync();
+        var renewer = new CountingRenewer(renews: true);
+        _options.LeaseRenewalInterval = TimeSpan.FromMilliseconds(20);
+        _extractor.Setup(e => e.ImproveAsync(document.Id, It.IsAny<CancellationToken>()))
+            .Returns(async (Guid _, CancellationToken ct) => { await Task.Delay(300, ct); return Extracted(); });
+
+        var outcome = await new QueueCommandProcessor(_db, _extractor.Object, Options.Create(_options), NullLogger<QueueCommandProcessor>.Instance, renewer)
+            .ProcessAsync(command.Id, Worker, CancellationToken.None);
+
+        outcome.Should().Be(QueueCommandOutcome.Completed);
+        renewer.Calls.Should().BeGreaterThan(1);
+        renewer.Owners.Should().OnlyContain(o => o == Worker);
+    }
+
+    [Fact]
+    public async Task LeaseLostDuringExtraction_CancelsExtraction_AndDiscardsAttempt()
+    {
+        var (document, command) = await SeedAsync();
+        _options.LeaseRenewalInterval = TimeSpan.FromMilliseconds(20);
+        _extractor.Setup(e => e.ImproveAsync(document.Id, It.IsAny<CancellationToken>()))
+            .Returns(async (Guid _, CancellationToken ct) => { await Task.Delay(Timeout.Infinite, ct); return Extracted(); });
+
+        var outcome = await new QueueCommandProcessor(_db, _extractor.Object, Options.Create(_options), NullLogger<QueueCommandProcessor>.Instance, new CountingRenewer(renews: false))
+            .ProcessAsync(command.Id, Worker, CancellationToken.None);
+
+        outcome.Should().Be(QueueCommandOutcome.LeaseLost);
+        (await _db.InvoiceExtractionResults.AnyAsync()).Should().BeFalse();
+        command.Status.Should().Be(QueueCommandStatus.Processing);
+    }
+
+    private sealed class CountingRenewer(bool renews) : IQueueLeaseRenewer
+    {
+        private int _calls;
+        public int Calls => _calls;
+        public System.Collections.Concurrent.ConcurrentBag<string> Owners { get; } = new();
+
+        public Task<bool> RenewAsync(Guid commandId, string leaseOwner, TimeSpan leaseDuration, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _calls);
+            Owners.Add(leaseOwner);
+            return Task.FromResult(renews);
+        }
+    }
 }

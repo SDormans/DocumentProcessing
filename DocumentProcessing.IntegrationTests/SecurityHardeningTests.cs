@@ -1,5 +1,10 @@
 using DocumentProcessing.Api.Controllers;
 using DocumentProcessing.Api.Extensions;
+using DocumentProcessing.Api.Middleware;
+using DocumentProcessing.Application.Exceptions;
+using DocumentProcessing.Domain.Exceptions;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using FluentAssertions;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
@@ -27,14 +32,70 @@ public class SecurityHardeningTests
             .Should().ContainSingle(a => a.PolicyName == RateLimitingSetup.UploadPolicy);
     }
 
-    [Theory]
-    [InlineData(nameof(AuthController.Login))]
-    [InlineData(nameof(AuthController.Logout))]
-    public void Only_login_and_logout_skip_antiforgery(string action)
+    [Fact]
+    public void Only_login_skips_antiforgery()
     {
-        typeof(AuthController).GetMethod(action)!
-            .GetCustomAttributes(typeof(IgnoreAntiforgeryTokenAttribute), inherit: true)
-            .Should().ContainSingle();
+        typeof(AuthController).GetMethods()
+            .Where(m => m.GetCustomAttributes(typeof(IgnoreAntiforgeryTokenAttribute), inherit: true).Length > 0)
+            .Select(m => m.Name)
+            .Should().Equal(nameof(AuthController.Login));
+    }
+
+    [Theory]
+    [InlineData(null, "Development", CookieSecurePolicy.None)]
+    [InlineData(null, "Production", CookieSecurePolicy.Always)]
+    [InlineData("SameAsRequest", "Production", CookieSecurePolicy.SameAsRequest)]
+    [InlineData("always", "Development", CookieSecurePolicy.Always)]
+    public void Cookie_secure_policy_defaults_by_environment_and_can_be_configured(string? configured, string environment, CookieSecurePolicy expected)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Authentication:CookieSecurePolicy"] = configured })
+            .Build();
+        var host = Mock.Of<IHostEnvironment>(e => e.EnvironmentName == environment);
+
+        AuthSetup.GetCookieSecurePolicy(configuration, host).Should().Be(expected);
+    }
+
+    [Fact]
+    public void Invalid_cookie_secure_policy_fails_startup()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Authentication:CookieSecurePolicy"] = "Sometimes" })
+            .Build();
+
+        FluentActions.Invoking(() => AuthSetup.GetCookieSecurePolicy(configuration, Mock.Of<IHostEnvironment>(e => e.EnvironmentName == "Production")))
+            .Should().Throw<InvalidOperationException>();
+    }
+
+    [Theory]
+    [InlineData(ValidationFailureKind.TooLarge, StatusCodes.Status413PayloadTooLarge)]
+    [InlineData(ValidationFailureKind.UnsupportedMediaType, StatusCodes.Status415UnsupportedMediaType)]
+    [InlineData(ValidationFailureKind.Invalid, StatusCodes.Status400BadRequest)]
+    public async Task Validation_failures_map_to_status_codes_by_kind(ValidationFailureKind kind, int expected)
+    {
+        var context = new DefaultHttpContext();
+        context.Response.Body = new MemoryStream();
+        var middleware = new ErrorHandlingMiddleware(
+            _ => throw new ValidationException("Upload validation failed.", ["File is too large. Maximum size is 10 MB."], kind),
+            NullLogger<ErrorHandlingMiddleware>.Instance);
+
+        await middleware.InvokeAsync(context);
+
+        context.Response.StatusCode.Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task Concurrency_conflicts_map_to_409()
+    {
+        var context = new DefaultHttpContext();
+        context.Response.Body = new MemoryStream();
+        var middleware = new ErrorHandlingMiddleware(
+            _ => throw new ConcurrencyConflictException("Changed.", new Exception()),
+            NullLogger<ErrorHandlingMiddleware>.Instance);
+
+        await middleware.InvokeAsync(context);
+
+        context.Response.StatusCode.Should().Be(StatusCodes.Status409Conflict);
     }
 
     [Fact]

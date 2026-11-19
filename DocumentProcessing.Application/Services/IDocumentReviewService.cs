@@ -42,19 +42,19 @@ public interface IDocumentReviewService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Haalt de auditlog voor een documentreview op.
+    /// Haalt de auditlog voor een documentreview op; null als het document niet bestaat of niet toegankelijk is.
     /// </summary>
-    Task<IReadOnlyList<ReviewAuditEntryDto>> GetAuditLogAsync(
+    Task<IReadOnlyList<ReviewAuditEntryDto>?> GetAuditLogAsync(
         Guid documentId,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Bepaalt of de ingelogde gebruiker een document mag beoordelen/corrigeren.
     /// </summary>
-    Task<bool> CanReviewAsync(string userId, CancellationToken cancellationToken = default);
+    bool CanReview();
 
     /// <summary>
     /// Bepaalt of de ingelogde gebruiker een document mag goedkeuren of afwijzen.
     /// </summary>
-    Task<bool> CanApproveOrRejectAsync(string userId, CancellationToken cancellationToken = default);
+    bool CanApproveOrReject();
 }

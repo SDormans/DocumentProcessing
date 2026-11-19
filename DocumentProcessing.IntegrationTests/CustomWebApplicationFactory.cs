@@ -20,8 +20,8 @@ public static class TestFixture
         MockRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Document?)null);
 
-        MockRepository.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Document>() as IReadOnlyList<Document>);
+        MockRepository.Setup(r => r.GetPageAsync(It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PagedResult<Document>([], 0));
 
         MockRepository.Setup(r => r.AddAsync(It.IsAny<Document>(), It.IsAny<CancellationToken>()))
             .Callback<Document, CancellationToken>((d, _) =>

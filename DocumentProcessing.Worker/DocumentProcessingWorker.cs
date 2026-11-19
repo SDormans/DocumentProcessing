@@ -4,8 +4,8 @@ using Microsoft.Extensions.Options;
 namespace DocumentProcessing.Worker;
 
 /// <summary>
-/// Polls the database-backed queue, leases due commands and processes them in parallel, each in
-/// its own DI scope. See docs/adr/0001-database-backed-queue.md.
+/// Polls the database-backed queue, leases due commands and processes up to
+/// <see cref="QueueProcessingOptions.BatchSize"/> of them at a time, each in its own DI scope. See docs/adr/0001-database-backed-queue.md.
 /// </summary>
 public class DocumentProcessingWorker : BackgroundService
 {
@@ -28,72 +28,103 @@ public class DocumentProcessingWorker : BackgroundService
     {
         _logger.LogInformation("Document processing worker {WorkerId} started.", _workerId);
 
+        // Each command holds a slot until it finishes, so one slow document never blocks the others.
+        var inFlight = new HashSet<Task>();
+        var nextPurgeUtc = DateTime.UtcNow;
         while (!stoppingToken.IsCancellationRequested)
         {
-            var claimed = 0;
+            if (DateTime.UtcNow >= nextPurgeUtc)
+            {
+                nextPurgeUtc = DateTime.UtcNow + _options.PurgeInterval;
+                await PurgeCompletedCommandsAsync(stoppingToken);
+            }
+
+            var freeSlots = _options.BatchSize - inFlight.Count;
+            if (freeSlots > 0)
+            {
+                try
+                {
+                    foreach (var (commandId, leaseOwner) in await ClaimAsync(freeSlots, stoppingToken))
+                        inFlight.Add(Task.Run(() => ProcessCommandAsync(commandId, leaseOwner, stoppingToken), CancellationToken.None));
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error while polling the processing queue.");
+                }
+            }
+
+            // All slots busy: wait for one to free up. Otherwise the queue is drained: wait for the
+            // poll interval, or a finished command, whichever comes first.
+            var wakeUp = inFlight.Count >= _options.BatchSize
+                ? Task.WhenAny(inFlight)
+                : Task.WhenAny(inFlight.Append(Task.Delay(_options.PollInterval, stoppingToken)));
             try
             {
-                claimed = await ProcessBatchAsync(stoppingToken);
+                await (await wakeUp);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
                 break;
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error while polling the processing queue.");
-            }
 
-            // A full batch suggests more work is waiting; poll again immediately.
-            if (claimed < _options.BatchSize)
-            {
-                try
-                {
-                    await Task.Delay(_options.PollInterval, stoppingToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-            }
+            inFlight.RemoveWhere(t => t.IsCompleted);
         }
 
+        await Task.WhenAll(inFlight);
         _logger.LogInformation("Document processing worker {WorkerId} stopped.", _workerId);
     }
 
-    internal async Task<int> ProcessBatchAsync(CancellationToken stoppingToken)
+    internal async Task PurgeCompletedCommandsAsync(CancellationToken stoppingToken)
     {
-        IReadOnlyList<Guid> commandIds;
-        using (var scope = _scopeFactory.CreateScope())
+        try
         {
+            using var scope = _scopeFactory.CreateScope();
             var repository = scope.ServiceProvider.GetRequiredService<IQueueCommandRepository>();
-            var claimed = await repository.ClaimAsync(_workerId, _options.LeaseDuration, _options.BatchSize, stoppingToken);
-            commandIds = claimed.Select(c => c.Id).ToList();
-        }
-
-        if (commandIds.Count == 0)
-            return 0;
-
-        _logger.LogInformation("Claimed {Count} queue command(s).", commandIds.Count);
-
-        await Parallel.ForEachAsync(
-            commandIds,
-            new ParallelOptions { MaxDegreeOfParallelism = _options.BatchSize, CancellationToken = stoppingToken },
-            async (commandId, ct) =>
+            var purged = await repository.PurgeCompletedAsync(DateTime.UtcNow - _options.CompletedRetention, stoppingToken);
+            if (purged > 0)
             {
-                using var scope = _scopeFactory.CreateScope();
-                var processor = scope.ServiceProvider.GetRequiredService<QueueCommandProcessor>();
-                try
-                {
-                    await processor.ProcessAsync(commandId, _workerId, ct);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    // The lease expires and the command is reclaimed, which counts as another attempt.
-                    _logger.LogError(ex, "Unexpected error processing queue command {QueueCommandId}.", commandId);
-                }
-            });
+                _logger.LogInformation("Purged {Count} completed queue commands older than {Retention}.", purged, _options.CompletedRetention);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Purging completed queue commands failed.");
+        }
+    }
 
-        return commandIds.Count;
+    private async Task<IReadOnlyList<(Guid Id, string LeaseOwner)>> ClaimAsync(int count, CancellationToken stoppingToken)
+    {
+        // A lease owner per claim, not per worker: if this worker reclaims its own expired command while the
+        // first attempt is still running, the stale attempt must fail the lease and concurrency checks.
+        var leaseOwner = $"{_workerId}:{Guid.NewGuid():N}";
+        using var scope = _scopeFactory.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IQueueCommandRepository>();
+        var claimed = await repository.ClaimAsync(leaseOwner, _options.LeaseDuration, count, stoppingToken);
+        if (claimed.Count > 0)
+            _logger.LogInformation("Claimed {Count} queue command(s).", claimed.Count);
+        return claimed.Select(c => (c.Id, leaseOwner)).ToList();
+    }
+
+    private async Task ProcessCommandAsync(Guid commandId, string leaseOwner, CancellationToken stoppingToken)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var processor = scope.ServiceProvider.GetRequiredService<IQueueCommandProcessor>();
+            await processor.ProcessAsync(commandId, leaseOwner, stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // Shutting down; the lease expires and another worker reclaims the command.
+        }
+        catch (Exception ex)
+        {
+            // The lease expires and the command is reclaimed, which counts as another attempt.
+            _logger.LogError(ex, "Unexpected error processing queue command {QueueCommandId}.", commandId);
+        }
     }
 }
