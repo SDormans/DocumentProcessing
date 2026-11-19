@@ -71,7 +71,6 @@ const App: React.FC = () => {
       <main className="app-shell">
         <form className="sign-in" onSubmit={signIn}>
           <h1>Document Processing</h1>
-          <nav className="app-nav"><Link to="/">Documents</Link> <Link to="/review-queue">Review queue</Link></nav>
           <p>Sign in to review uploaded documents.</p>
           <label htmlFor="username">Username</label>
           <input id="username" autoComplete="username" required value={username}

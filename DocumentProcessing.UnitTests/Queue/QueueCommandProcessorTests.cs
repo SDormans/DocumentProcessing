@@ -240,7 +240,14 @@ public class QueueCommandProcessorTests : IDisposable
         var renewer = new CountingRenewer(renews: true);
         _options.LeaseRenewalInterval = TimeSpan.FromMilliseconds(20);
         _extractor.Setup(e => e.ImproveAsync(document.Id, It.IsAny<CancellationToken>()))
-            .Returns(async (Guid _, CancellationToken ct) => { await Task.Delay(300, ct); return Extracted(); });
+            .Returns(async (Guid _, CancellationToken ct) =>
+            {
+                // Wait for heartbeat renewals rather than a fixed time, so a slow CI runner cannot fail the test.
+                var deadline = DateTime.UtcNow.AddSeconds(10);
+                while (renewer.Calls < 3 && DateTime.UtcNow < deadline)
+                    await Task.Delay(10, ct);
+                return Extracted();
+            });
 
         var outcome = await new QueueCommandProcessor(_db, _extractor.Object, Options.Create(_options), NullLogger<QueueCommandProcessor>.Instance, _scanner.Object, _storage.Object, renewer)
             .ProcessAsync(command.Id, Worker, CancellationToken.None);
