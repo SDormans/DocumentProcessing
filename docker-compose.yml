@@ -145,8 +145,8 @@ services:
     profiles: ["llamacpp"]
     environment:
       LLAMA_ARG_MODEL: /models/${LLAMA_MODEL_FILE:-model.gguf}
-      # The name the app asks for (AI_LOCAL_MODEL), so the availability check finds the model.
-      LLAMA_ARG_ALIAS: ${AI_LOCAL_MODEL:-local-model}
+      # The name the app asks for (AI_LOCAL_MODEL, same default as the API and worker), so the availability check finds the model.
+      LLAMA_ARG_ALIAS: ${AI_LOCAL_MODEL:-llama3.1:8b}
       LLAMA_ARG_CTX_SIZE: ${LLAMA_CTX_SIZE:-8192}
       LLAMA_ARG_HOST: 0.0.0.0
       LLAMA_ARG_PORT: 8080
