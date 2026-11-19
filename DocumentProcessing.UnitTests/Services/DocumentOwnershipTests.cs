@@ -23,8 +23,7 @@ public class DocumentOwnershipTests
     {
         foreach (var d in new[] { _owned, _foreign, _legacy })
             _documents.Setup(r => r.GetByIdAsync(d.Id, It.IsAny<CancellationToken>())).ReturnsAsync(d);
-        _documents.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<Document>());
-        _documents.Setup(r => r.GetByOwnerAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<Document>());
+        _documents.Setup(r => r.GetPageAsync(It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(new PagedResult<Document>([], 0));
         _storage.Setup(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(Stream.Null);
     }
 
@@ -62,8 +61,8 @@ public class DocumentOwnershipTests
         (await service.GetDocumentFileAsync(_foreign.Id)).Should().BeNull();
 
         await service.GetDocumentsAsync();
-        _documents.Verify(r => r.GetByOwnerAsync("alice", It.IsAny<CancellationToken>()), Times.Once);
-        _documents.Verify(r => r.GetAllAsync(It.IsAny<CancellationToken>()), Times.Never);
+        _documents.Verify(r => r.GetPageAsync("alice", It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
+        _documents.Verify(r => r.GetPageAsync(null, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -75,7 +74,7 @@ public class DocumentOwnershipTests
         (await service.GetDocumentAsync(_legacy.Id)).Should().NotBeNull();
 
         await service.GetDocumentsAsync();
-        _documents.Verify(r => r.GetAllAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _documents.Verify(r => r.GetPageAsync(null, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

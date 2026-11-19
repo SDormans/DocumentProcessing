@@ -63,6 +63,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 new FakeAiProvider(true, InvoiceExtractionSchema.Parse(ExtractedInvoiceJson)));
             services.AddScoped<IAiProvider>(sp => sp.GetRequiredKeyedService<IAiProvider>(AiModelType.Cloud));
             // The worker's processor, so tests can drain the queue in-process.
+            services.AddSingleton<IQueueLeaseRenewer, QueueLeaseRenewer>();
             services.AddScoped<QueueCommandProcessor>();
         });
     }

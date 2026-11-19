@@ -8,6 +8,9 @@ namespace DocumentProcessing.Infrastructure.TextExtraction;
 
 public class PdfPigTextExtractor : IDocumentTextExtractor
 {
+    /// <summary>Added when no page has a text layer; <see cref="HybridPdfTextExtractor"/> drops it once OCR ran.</summary>
+    public const string NoReadableTextWarning = "No readable text found in the PDF. Consider OCR for scanned documents.";
+
     private readonly ILogger<PdfPigTextExtractor> _logger;
 
     public PdfPigTextExtractor(ILogger<PdfPigTextExtractor> logger)
@@ -64,7 +67,7 @@ public class PdfPigTextExtractor : IDocumentTextExtractor
 
         if (!hasAnyText)
         {
-            warnings.Add("Geen leesbare tekst gevonden in PDF. Overweeg OCR voor gescande documenten.");
+            warnings.Add(NoReadableTextWarning);
         }
 
         var result = new TextExtractionResult

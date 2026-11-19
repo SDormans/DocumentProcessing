@@ -8,12 +8,28 @@ map $http_x_forwarded_proto $forwarded_proto {
     ""      $scheme;
 }
 
+# HSTS only when the client connection is HTTPS (an empty value omits the header).
+map $forwarded_proto $hsts_header {
+    https   "max-age=31536000";
+    default "";
+}
+
 server {
     listen 8080;
     server_name _;
     root /usr/share/nginx/html;
     index index.html;
     client_max_body_size ${CLIENT_MAX_BODY_SIZE};
+    server_tokens off;
+
+    # Inherited by every location below that does not set its own add_header.
+    # blob: frames are the in-app PDF preview (DocumentPreview.tsx).
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+    add_header Strict-Transport-Security $hsts_header always;
 
     location /api/ {
         proxy_pass ${API_UPSTREAM};

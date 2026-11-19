@@ -66,40 +66,37 @@ public class DocumentsController : ControllerBase
 
         using var stream = file.OpenReadStream();
 
-        try
-        {
-            var response = await _documentService.UploadDocumentAsync(
-                stream,
-                file.FileName,
-                file.ContentType,
-                cancellationToken);
+        // Validation failures surface as 400, 413 or 415 through ErrorHandlingMiddleware.
+        var response = await _documentService.UploadDocumentAsync(
+            stream,
+            file.FileName,
+            file.ContentType,
+            cancellationToken);
 
-            return CreatedAtAction(
-                nameof(GetDocument),
-                new { id = response.Id },
-                response);
-        }
-        catch (Application.Exceptions.ValidationException ex)
-        {
-            return BadRequest(new ErrorResponse
-            {
-                TraceId = HttpContext.TraceIdentifier,
-                Message = ex.Message,
-                Errors = ex.Errors
-            });
-        }
+        return CreatedAtAction(
+            nameof(GetDocument),
+            new { id = response.Id },
+            response);
     }
 
     /// <summary>
-    /// Returns a list of all uploaded documents.
+    /// Returns a page of documents, newest first. The total count is in the <c>X-Total-Count</c> header.
     /// </summary>
+    /// <param name="skip">Documents to skip.</param>
+    /// <param name="take">Page size, 1 to 200 (default 50).</param>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<DocumentDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetDocuments(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetDocuments(
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = DocumentService.DefaultPageSize,
+        CancellationToken cancellationToken = default)
     {
-        var documents = await _documentService.GetDocumentsAsync(cancellationToken);
-        return Ok(documents);
+        var page = await _documentService.GetDocumentsAsync(skip, take, cancellationToken);
+        Response.Headers[TotalCountHeader] = page.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return Ok(page.Items);
     }
+
+    public const string TotalCountHeader = "X-Total-Count";
 
     /// <summary>
     /// Returns a single document by its ID.
@@ -125,26 +122,23 @@ public class DocumentsController : ControllerBase
     }
 
     /// <summary>
-    /// Returns the original PDF document via an authorized endpoint.
-    /// </summary>
-    /// <summary>
     /// Re-queues a failed document with the given model type, e.g. to switch from an unavailable local model to the cloud model.
     /// </summary>
     [HttpPost("{id:guid}/retry-with-model")]
     [EnableRateLimiting(RateLimitingSetup.UploadPolicy)]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> RetryWithModel(Guid id, [FromBody] RetryWithModelRequest request, CancellationToken cancellationToken)
     {
         return await _documentService.RetryWithModelAsync(id, request.ModelType, cancellationToken) switch
         {
             ModelSwitchResult.Requeued => Accepted(new { id, status = "Queued", aiModelType = request.ModelType }),
-            ModelSwitchResult.NotFailed => Conflict(new { message = "Only failed documents can be retried with another model." }),
-            ModelSwitchResult.InvalidModel => BadRequest(new { message = $"Unknown model type '{request.ModelType}'. Use 'Cloud' or 'Local'." }),
-            ModelSwitchResult.ModelUnavailable => BadRequest(new { message = $"The {request.ModelType} model is not configured on this server." }),
-            _ => NotFound()
+            ModelSwitchResult.NotFailed => Conflict(Error("Only failed documents can be retried with another model.")),
+            ModelSwitchResult.InvalidModel => BadRequest(Error($"Unknown model type '{request.ModelType}'. Use 'Cloud' or 'Local'.")),
+            ModelSwitchResult.ModelUnavailable => BadRequest(Error($"The {request.ModelType} model is not configured on this server.")),
+            _ => NotFound(Error("Document not found."))
         };
     }
 
@@ -154,18 +148,21 @@ public class DocumentsController : ControllerBase
     [HttpPost("{id:guid}/requeue")]
     [Authorize(Policy = "IsAdmin")]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> RequeueDocument(Guid id, CancellationToken cancellationToken)
     {
         return await _documentService.RequeueAsync(id, cancellationToken) switch
         {
             RequeueResult.Requeued => Accepted(new { id, status = "Queued" }),
-            RequeueResult.NotFailed => Conflict(new { message = "Only failed documents can be re-queued." }),
-            _ => NotFound()
+            RequeueResult.NotFailed => Conflict(Error("Only failed documents can be re-queued.")),
+            _ => NotFound(Error("Document not found."))
         };
     }
 
+    /// <summary>
+    /// Returns the original PDF document via an authorized endpoint.
+    /// </summary>
     [HttpGet("{id:guid}/content")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
@@ -194,4 +191,6 @@ public class DocumentsController : ControllerBase
             });
         }
     }
+
+    private ErrorResponse Error(string message) => new() { TraceId = HttpContext.TraceIdentifier, Message = message };
 }

@@ -51,10 +51,10 @@ public interface IDocumentReviewService
     /// <summary>
     /// Bepaalt of de ingelogde gebruiker een document mag beoordelen/corrigeren.
     /// </summary>
-    Task<bool> CanReviewAsync(string userId, CancellationToken cancellationToken = default);
+    bool CanReview();
 
     /// <summary>
     /// Bepaalt of de ingelogde gebruiker een document mag goedkeuren of afwijzen.
     /// </summary>
-    Task<bool> CanApproveOrRejectAsync(string userId, CancellationToken cancellationToken = default);
+    bool CanApproveOrReject();
 }

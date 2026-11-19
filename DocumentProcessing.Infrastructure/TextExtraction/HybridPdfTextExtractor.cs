@@ -82,7 +82,7 @@ public sealed class HybridPdfTextExtractor : IDocumentTextExtractor
                 warnings.Add($"Only the first {_options.MaxPages} of {sparse.Count} pages without a text layer were OCR'd.");
 
             if (ocrPages > 0)
-                warnings.RemoveAll(w => w.StartsWith("Geen leesbare tekst", StringComparison.Ordinal));
+                warnings.Remove(PdfPigTextExtractor.NoReadableTextWarning);
 
             var method = !pages.Any(p => p.HasText) ? TextExtractionMethod.Failed
                 : pages.Any(IsSparse) ? TextExtractionMethod.Partial

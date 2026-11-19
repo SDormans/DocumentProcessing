@@ -92,6 +92,7 @@ _On branch `milestone/0-tech-debt` (not merged yet): package alignment, warning 
 - Update the README: parts still describe the old state ("not yet a working end-to-end system", "uploads are not queued"). Point to this wiki for the details.
 - Write ADRs for the decisions not yet written down (see [Architecture Decisions](Architecture-Decisions.md)).
 - Add an admin endpoint to re-queue a failed document, and a retention job for completed `QueueCommands`.
+- Full-repo review fixes (done): rejected documents get their own final `Rejected` status instead of `Failed`, the worker renews its queue lease during processing and refills free slots without waiting for the batch, Compose runs in Production, concurrent re-queues return `409`, upload errors map to `413`/`415` by type, logout requires the anti-forgery token, approve/reject checks every role claim, Nginx security headers, trusted-proxy forwarded headers, and a paged document list.
 
 ## Suggested order
 

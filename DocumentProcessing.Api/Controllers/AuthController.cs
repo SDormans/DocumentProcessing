@@ -88,7 +88,6 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("logout")]
     [AllowAnonymous]
-    [IgnoreAntiforgeryToken]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> Logout()
     {

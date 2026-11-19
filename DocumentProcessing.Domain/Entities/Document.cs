@@ -10,7 +10,9 @@ public enum DocumentStatus
     Processing,
     NeedsReview,
     Completed,
-    Failed
+    Failed,
+    // Stored as an integer: append new values, never reorder.
+    Rejected
 }
 
 public class Document
@@ -129,8 +131,9 @@ public class Document
 
         (DocumentStatus.NeedsReview, DocumentStatus.Completed) => true,
         (DocumentStatus.NeedsReview, DocumentStatus.Failed) => true,
+        (DocumentStatus.NeedsReview, DocumentStatus.Rejected) => true,
 
-        // Allow reprocessing retry from Failed
+        // Failed documents can be retried; Rejected is final.
         (DocumentStatus.Failed, DocumentStatus.Queued) => true,
         (DocumentStatus.Failed, DocumentStatus.Processing) => true,
 

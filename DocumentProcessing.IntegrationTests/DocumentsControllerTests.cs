@@ -103,14 +103,15 @@ public class DocumentsControllerTests
     public async Task GetDocuments_ReturnsOk()
     {
         // Arrange
-        _mockService.Setup(s => s.GetDocumentsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<DocumentDto>());
+        _mockService.Setup(s => s.GetDocumentsAsync(10, 5, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PagedResult<DocumentDto>(new List<DocumentDto>(), 42));
 
         // Act
-        var result = await _controller.GetDocuments(CancellationToken.None);
+        var result = await _controller.GetDocuments(10, 5, CancellationToken.None);
 
         // Assert
         result.Should().BeOfType<OkObjectResult>();
+        _controller.Response.Headers[DocumentsController.TotalCountHeader].ToString().Should().Be("42");
     }
 
     [Fact]

@@ -4,6 +4,26 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- Rejected documents no longer become `Failed` (which let them be re-queued and then stuck as "already decided"): they get a final `Rejected` status. A migration moves existing rejected documents over.
+- The worker renews its queue lease throughout OCR and AI extraction (`QueueProcessing:LeaseRenewalInterval`), so a second worker can't reclaim a long-running document; a lost lease cancels the attempt.
+- The worker claims a new command whenever a slot frees up instead of waiting for the slowest document in a batch.
+- Concurrent re-queues of the same document return `409` instead of `500`.
+- Upload errors map to `413`/`415` from a typed `ValidationFailureKind` instead of matching message text.
+- Approve/reject checks every role claim, in the API policy and the application service.
+- Logout requires the anti-forgery token; the SPA sends it.
+- External OCR processes: stdout/stderr reads are awaited after a timeout or cancellation.
+- Web image uses Node 24, matching CI and the README.
+
+### Changed
+- Compose runs the API and worker in `Production` by default (no Swagger, JSON logs) with `Authentication:CookieSecurePolicy=SameAsRequest` (Secure cookies over HTTPS); `COOKIE_SECURE_POLICY` and `ASPNETCORE_ENVIRONMENT` override them.
+- `GET /api/documents` is paged (`skip`, `take` up to 200, `X-Total-Count`); the list has a "Show more" button.
+- Nginx adds security headers (CSP, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, HSTS over HTTPS).
+- The API honours `X-Forwarded-For`/`-Proto` only from `ForwardedHeaders:KnownProxies`/`KnownNetworks`.
+
+### Removed
+- Unused queue methods `GetPendingAsync`, `GetReadyForProcessingAsync` and `QueueCommand.SetNextAttempt`.
+
 ### Added
 - Choice between a cloud and a local AI model: a dropdown in the header saves each user's choice (`GET/PUT /api/settings/ai`), each upload records it, and the worker extracts with it. Settings under `Ai:Cloud:*`, `Ai:Local:*`, `Ai:DefaultModelType` and `Ai:Fallback:Mode`, validated at startup. Local runtimes (Ollama, llama.cpp) use the OpenAI-compatible API; a new `AnthropicProvider` supports Claude. Failed documents show why and can be retried with the other model (`POST /api/documents/{id}/retry-with-model`); `Ai:Fallback:Mode=Automatic` switches models without asking. Optional `ollama` service under the `local-llm` Compose profile. See ADR 0007.
 - Real-model evaluation: `npm run evaluate:predict` runs the production prompt, AI provider and validation over the corpus (`tools/DocumentProcessing.Evaluation`), `npm run evaluate:report` scores it. `.github/workflows/evaluation.yml` does both nightly and on demand when the `AI_API_KEY` secret is set.

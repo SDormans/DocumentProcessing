@@ -17,7 +17,8 @@ builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddInvoiceExtraction(builder.Configuration);
 
 builder.Services.Configure<QueueProcessingOptions>(builder.Configuration.GetSection(QueueProcessingOptions.SectionName));
-builder.Services.AddScoped<QueueCommandProcessor>();
+builder.Services.AddSingleton<IQueueLeaseRenewer, QueueLeaseRenewer>();
+builder.Services.AddScoped<IQueueCommandProcessor, QueueCommandProcessor>();
 builder.Services.AddHostedService<DocumentProcessingWorker>();
 
 builder.Build().Run();

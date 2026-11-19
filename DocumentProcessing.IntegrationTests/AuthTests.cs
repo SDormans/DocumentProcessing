@@ -51,6 +51,16 @@ public class AuthTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Logout_requires_the_antiforgery_token()
+    {
+        using var client = _factory.CreateApiClient();
+        (await client.LoginAsync(ApiFactory.AdminUserName, ApiFactory.AdminPassword)).EnsureSuccessStatusCode();
+
+        (await client.Http.PostAsync("/api/auth/logout", null)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await client.Http.GetAsync("/api/documents")).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task Only_admins_can_create_users()
     {
         using var admin = _factory.CreateApiClient();

@@ -13,6 +13,14 @@ public interface ICurrentUser
     /// True for roles listed in <see cref="DocumentAccessOptions.UnrestrictedRoles"/>; such users see every document.
     /// </summary>
     bool HasUnrestrictedDocumentAccess { get; }
+
+    bool IsInRole(string role);
+}
+
+public static class ReviewRoles
+{
+    /// <summary>Roles that may approve or reject documents (the API's <c>CanApproveReject</c> policy).</summary>
+    public static readonly IReadOnlyList<string> CanApproveOrReject = ["Admin", "Reviewer"];
 }
 
 public class DocumentAccessOptions

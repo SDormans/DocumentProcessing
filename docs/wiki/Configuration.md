@@ -14,6 +14,8 @@ Standard ASP.NET Core configuration: `appsettings*.json`, then environment varia
 | `FileStorage:AzureBlob:ManagedIdentityClientId` | | For a user-assigned managed identity |
 | `FileStorage:AzureBlob:ContainerName` | `documents` | |
 | `FileStorage:AzureBlob:CreateContainerIfNotExists` | `false` | Local testing only |
+| `Authentication:CookieSecurePolicy` | `None` in Development, `Always` otherwise | `Always`, `SameAsRequest` or `None`; applies to the auth and anti-forgery cookies. Compose sets `COOKIE_SECURE_POLICY` (default `SameAsRequest`: Secure when the client connection is HTTPS, as reported by the trusted proxy, so plain `http://localhost` still works). `Always` rejects sign-in over plain HTTP |
+| `ForwardedHeaders:KnownProxies` / `KnownNetworks` | loopback only | IPs / CIDR ranges whose `X-Forwarded-For`/`-Proto` are trusted. Compose trusts `FORWARDED_HEADERS_KNOWN_NETWORK` (default `172.16.0.0/12`, Docker's bridge range); set the ingress range on Azure |
 | `Logging:Console:FormatterName` | `json` outside Development | `json` or `simple` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | (unset = no export) | Plus the standard `OTEL_*` variables |
 
@@ -50,9 +52,10 @@ Standard ASP.NET Core configuration: `appsettings*.json`, then environment varia
 | `Ai:{Cloud\|Local}:InputCostPerMillionTokens` / `OutputCostPerMillionTokens` | `0` | Feeds the `ai.cost` metric |
 
 Older configuration with flat keys (`Ai:Provider`, `Ai:Endpoint`, `Ai:ApiKey`, `Ai:ModelName`, ...) and no `Ai:Cloud` section still works: it is read as the cloud model.
-| `QueueProcessing:BatchSize` | `4` | Commands claimed per poll; also the parallelism |
+| `QueueProcessing:BatchSize` | `4` | Commands processed at once; a free slot is refilled on the next claim |
 | `QueueProcessing:PollInterval` | `00:00:05` | |
-| `QueueProcessing:LeaseDuration` | `00:05:00` | Must exceed `Ai:TotalTimeoutSeconds` |
+| `QueueProcessing:LeaseDuration` | `00:05:00` | Renewed while a command runs; a crashed worker's commands are reclaimed after it expires |
+| `QueueProcessing:LeaseRenewalInterval` | a third of `LeaseDuration` | Must be shorter than `LeaseDuration` |
 | `QueueProcessing:MaxAttempts` | `3` | Queue-level attempts before `Failed` |
 | `QueueProcessing:BaseRetryDelay` | `00:00:30` | Exponential backoff base |
 | `QueueProcessing:CompletedRetention` | `30.00:00:00` | Completed commands older than this are deleted; failed ones are kept |

@@ -3,6 +3,7 @@ using DocumentProcessing.Application.DTOs;
 using DocumentProcessing.Application.Exceptions;
 using DocumentProcessing.Domain.Entities;
 using DocumentProcessing.Domain.Enums;
+using DocumentProcessing.Domain.Exceptions;
 using DocumentProcessing.Domain.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -11,6 +12,9 @@ namespace DocumentProcessing.Application.Services;
 
 public class DocumentService : IDocumentService
 {
+    public const int DefaultPageSize = 50;
+    public const int MaxPageSize = 200;
+
     private readonly IDocumentRepository _documentRepository;
     private readonly IFileStorage _fileStorage;
     private readonly IProcessingQueue _processingQueue;
@@ -52,9 +56,25 @@ public class DocumentService : IDocumentService
         document.UpdateStatus(DocumentStatus.Queued);
         await _documentRepository.UpdateAsync(document, cancellationToken);
         await _processingQueue.EnqueueAsync(document.Id, cancellationToken);
-        await _documentRepository.SaveChangesAsync(cancellationToken);
+        if (!await TrySaveRequeueAsync(document.Id, cancellationToken))
+            return RequeueResult.NotFailed;
         _logger.LogInformation("Document {DocumentId} re-queued by {UserId}.", document.Id, _currentUser.UserId);
         return RequeueResult.Requeued;
+    }
+
+    /// <summary>Returns false when a concurrent request re-queued the document first.</summary>
+    private async Task<bool> TrySaveRequeueAsync(Guid documentId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _documentRepository.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        catch (ConcurrencyConflictException)
+        {
+            _logger.LogInformation("Document {DocumentId} was already re-queued by a concurrent request.", documentId);
+            return false;
+        }
     }
 
     public async Task<ModelSwitchResult> RetryWithModelAsync(Guid id, string? modelType, CancellationToken cancellationToken = default)
@@ -73,7 +93,8 @@ public class DocumentService : IDocumentService
         document.UpdateStatus(DocumentStatus.Queued);
         await _documentRepository.UpdateAsync(document, cancellationToken);
         await _processingQueue.EnqueueAsync(document.Id, cancellationToken);
-        await _documentRepository.SaveChangesAsync(cancellationToken);
+        if (!await TrySaveRequeueAsync(document.Id, cancellationToken))
+            return ModelSwitchResult.NotFailed;
         _logger.LogInformation("Document {DocumentId} re-queued with the {ModelType} model by {UserId}.", document.Id, parsed, _currentUser.UserId);
         return ModelSwitchResult.Requeued;
     }
@@ -88,8 +109,12 @@ public class DocumentService : IDocumentService
         var validationErrors = ValidateFile(fileStream, safeFileName, contentType, _options.MaxFileSizeBytes).ToList();
         if (validationErrors.Count > 0)
         {
-            _logger.LogWarning("Document upload validation failed: {Errors}", string.Join("; ", validationErrors));
-            throw new ValidationException("Document upload validation failed.", validationErrors);
+            var messages = validationErrors.Select(e => e.Message).ToList();
+            _logger.LogWarning("Document upload validation failed: {Errors}", string.Join("; ", messages));
+            var kind = validationErrors.Any(e => e.Kind == ValidationFailureKind.TooLarge) ? ValidationFailureKind.TooLarge
+                : validationErrors.Any(e => e.Kind == ValidationFailureKind.UnsupportedMediaType) ? ValidationFailureKind.UnsupportedMediaType
+                : ValidationFailureKind.Invalid;
+            throw new ValidationException("Document upload validation failed.", messages, kind);
         }
 
         var contentHash = ComputeContentHash(fileStream);
@@ -156,17 +181,19 @@ public class DocumentService : IDocumentService
         return document == null ? null : MapToDto(document);
     }
 
-    public async Task<IReadOnlyList<DocumentDto>> GetDocumentsAsync(CancellationToken cancellationToken = default)
+    public async Task<PagedResult<DocumentDto>> GetDocumentsAsync(int skip = 0, int take = DefaultPageSize, CancellationToken cancellationToken = default)
     {
-        IReadOnlyList<Document> documents;
+        skip = Math.Max(0, skip);
+        take = Math.Clamp(take, 1, MaxPageSize);
+        PagedResult<Document> page;
         if (_currentUser.HasUnrestrictedDocumentAccess)
-            documents = await _documentRepository.GetAllAsync(cancellationToken);
+            page = await _documentRepository.GetPageAsync(null, skip, take, cancellationToken);
         else if (string.IsNullOrEmpty(_currentUser.UserId))
-            documents = [];
+            page = new PagedResult<Document>([], 0);
         else
-            documents = await _documentRepository.GetByOwnerAsync(_currentUser.UserId, cancellationToken);
+            page = await _documentRepository.GetPageAsync(_currentUser.UserId, skip, take, cancellationToken);
 
-        return documents.Select(MapToDto).ToList();
+        return new PagedResult<DocumentDto>(page.Items.Select(MapToDto).ToList(), page.TotalCount);
     }
 
     public async Task<DocumentFileDto?> GetDocumentFileAsync(Guid id, CancellationToken cancellationToken = default)
@@ -200,33 +227,33 @@ public class DocumentService : IDocumentService
         return document;
     }
 
-    private static IEnumerable<string> ValidateFile(Stream fileStream, string originalFileName, string contentType, long maxFileSizeBytes)
+    private static IEnumerable<(ValidationFailureKind Kind, string Message)> ValidateFile(Stream fileStream, string originalFileName, string contentType, long maxFileSizeBytes)
     {
         if (string.IsNullOrWhiteSpace(originalFileName))
         {
-            yield return "File name is required.";
+            yield return (ValidationFailureKind.Invalid, "File name is required.");
             yield break;
         }
 
         if (!originalFileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
         {
-            yield return "Only PDF files are allowed.";
+            yield return (ValidationFailureKind.UnsupportedMediaType, "Only PDF files are allowed.");
         }
 
         if (!string.Equals(contentType, "application/pdf", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(contentType, "application/octet-stream", StringComparison.OrdinalIgnoreCase))
         {
-            yield return "Content type must be application/pdf or application/octet-stream.";
+            yield return (ValidationFailureKind.UnsupportedMediaType, "Content type must be application/pdf or application/octet-stream.");
         }
 
         if (fileStream.Length == 0)
         {
-            yield return "File cannot be empty.";
+            yield return (ValidationFailureKind.Invalid, "File cannot be empty.");
         }
 
         if (fileStream.Length > maxFileSizeBytes)
         {
-            yield return $"File is too large. Maximum size is {maxFileSizeBytes / 1024 / 1024} MB.";
+            yield return (ValidationFailureKind.TooLarge, $"File is too large. Maximum size is {maxFileSizeBytes / 1024 / 1024} MB.");
         }
 
         if (fileStream.Length > 0)
@@ -235,7 +262,7 @@ public class DocumentService : IDocumentService
             var bytesRead = fileStream.Read(pdfHeader, 0, 5);
             if (bytesRead < 5 || !IsPdfSignature(pdfHeader))
             {
-                yield return "File is not a valid PDF document (invalid PDF signature).";
+                yield return (ValidationFailureKind.UnsupportedMediaType, "File is not a valid PDF document (invalid PDF signature).");
             }
         }
     }

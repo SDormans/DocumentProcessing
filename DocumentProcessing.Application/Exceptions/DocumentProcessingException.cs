@@ -6,14 +6,25 @@ public abstract class DocumentProcessingException : Exception
     protected DocumentProcessingException(string message, Exception inner) : base(message, inner) { }
 }
 
+public enum ValidationFailureKind
+{
+    Invalid,
+    TooLarge,
+    UnsupportedMediaType
+}
+
 public class ValidationException : DocumentProcessingException
 {
     public IEnumerable<string> Errors { get; }
 
-    public ValidationException(string message, IEnumerable<string> errors)
+    /// <summary>The most significant failure, so the API can pick 413/415 without parsing messages.</summary>
+    public ValidationFailureKind Kind { get; }
+
+    public ValidationException(string message, IEnumerable<string> errors, ValidationFailureKind kind = ValidationFailureKind.Invalid)
         : base(message)
     {
         Errors = errors;
+        Kind = kind;
     }
 }
 

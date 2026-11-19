@@ -21,7 +21,7 @@ public class RepositoryTests : IDisposable
         new(Guid.NewGuid(), "invoice.pdf", "application/pdf", 10, "hash", "key", DocumentStatus.Uploaded, createdAtUtc);
 
     [Fact]
-    public async Task DocumentRepository_GetAllAsync_ReturnsNewestFirst()
+    public async Task DocumentRepository_GetPageAsync_ReturnsNewestFirst_AndPages()
     {
         var repository = new DocumentRepository(_dbContext);
         var older = NewDocument(DateTime.UtcNow.AddHours(-1));
@@ -30,9 +30,14 @@ public class RepositoryTests : IDisposable
         await repository.AddAsync(newer);
         await repository.SaveChangesAsync();
 
-        var all = await repository.GetAllAsync();
+        var all = await repository.GetPageAsync(null, 0, 50);
+        var second = await repository.GetPageAsync(null, 1, 1);
 
-        all.Select(d => d.Id).Should().Equal(newer.Id, older.Id);
+        all.Items.Select(d => d.Id).Should().Equal(newer.Id, older.Id);
+        all.TotalCount.Should().Be(2);
+        second.Items.Select(d => d.Id).Should().Equal(older.Id);
+        second.TotalCount.Should().Be(2);
+        (await repository.GetPageAsync("someone-else", 0, 50)).TotalCount.Should().Be(0);
         (await repository.GetByIdAsync(older.Id)).Should().BeSameAs(older);
         (await repository.GetByIdAsync(Guid.NewGuid())).Should().BeNull();
     }

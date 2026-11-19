@@ -117,8 +117,7 @@ public class DocumentReviewService : IDocumentReviewService
             return NotFoundResponse(documentId, "Document niet gevonden.");
         }
 
-        var canReview = await CanReviewAsync(userId, cancellationToken);
-        if (!canReview)
+        if (!CanReview())
         {
             return ForbiddenResponse(documentId, "U heeft geen toestemming om dit document te corrigeren.");
         }
@@ -198,8 +197,7 @@ public class DocumentReviewService : IDocumentReviewService
             return NotFoundResponse(documentId, "Document niet gevonden.");
         }
 
-        var canApprove = await CanApproveOrRejectAsync(userId, cancellationToken);
-        if (!canApprove)
+        if (!CanApproveOrReject())
         {
             return ForbiddenResponse(documentId, "U heeft geen toestemming om dit document goed te keuren.");
         }
@@ -303,8 +301,7 @@ public class DocumentReviewService : IDocumentReviewService
             return NotFoundResponse(documentId, "Document niet gevonden.");
         }
 
-        var canApprove = await CanApproveOrRejectAsync(userId, cancellationToken);
-        if (!canApprove)
+        if (!CanApproveOrReject())
         {
             return ForbiddenResponse(documentId, "U heeft geen toestemming om dit document af te wijzen.");
         }
@@ -333,7 +330,7 @@ public class DocumentReviewService : IDocumentReviewService
         await _reviewRepository.AddAuditEntryAsync(entry, cancellationToken);
 
         document.MarkProcessed();
-        document.UpdateStatus(Domain.Entities.DocumentStatus.Failed);
+        document.UpdateStatus(Domain.Entities.DocumentStatus.Rejected);
         await _reviewRepository.UpdateAsync(review, cancellationToken);
         await _documentRepository.UpdateAsync(document, cancellationToken);
         if (!await TrySaveAsync(documentId, cancellationToken))
@@ -385,15 +382,9 @@ public class DocumentReviewService : IDocumentReviewService
         }).OrderByDescending(e => e.CreatedAtUtc).ToList();
     }
 
-    public async Task<bool> CanReviewAsync(string userId, CancellationToken cancellationToken = default)
-    {
-        return !string.IsNullOrEmpty(userId);
-    }
+    public bool CanReview() => !string.IsNullOrEmpty(_currentUser.UserId);
 
-    public async Task<bool> CanApproveOrRejectAsync(string userId, CancellationToken cancellationToken = default)
-    {
-        return !string.IsNullOrEmpty(userId);
-    }
+    public bool CanApproveOrReject() => CanReview() && ReviewRoles.CanApproveOrReject.Any(_currentUser.IsInRole);
 
     /// <summary>
     /// Returns null both for missing documents and for documents the user may not see, so ids of other users' documents are not disclosed.
