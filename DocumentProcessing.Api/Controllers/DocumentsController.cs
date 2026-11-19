@@ -1,3 +1,5 @@
+using DocumentProcessing.Domain.Interfaces;
+using DocumentProcessing.Domain.Entities;
 using DocumentProcessing.Application.DTOs;
 using DocumentProcessing.Application.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -86,18 +88,57 @@ public class DocumentsController : ControllerBase
     /// <param name="take">Page size, 1 to 200 (default 50).</param>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<DocumentDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GetDocuments(
         [FromQuery] int skip = 0,
         [FromQuery] int take = DocumentService.DefaultPageSize,
+        [FromQuery] string? status = null,
+        [FromQuery] string? search = null,
         CancellationToken cancellationToken = default)
     {
-        var page = await _documentService.GetDocumentsAsync(skip, take, cancellationToken);
+        if (skip < 0 || take < 1 || take > DocumentService.MaxPageSize)
+            return BadRequest(Error($"skip must be 0 or more and take between 1 and {DocumentService.MaxPageSize}."));
+        DocumentStatus? statusFilter = null;
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (!Enum.TryParse<DocumentStatus>(status, ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
+                return BadRequest(Error($"Unknown status '{status}'."));
+            statusFilter = parsed;
+        }
+
+        var page = await _documentService.GetDocumentPageAsync(new DocumentQuery(statusFilter, search, skip, take), cancellationToken);
         Response.Headers[TotalCountHeader] = page.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
         return Ok(page.Items);
     }
 
     public const string TotalCountHeader = "X-Total-Count";
 
+    /// <summary>Re-runs extraction for a document awaiting review (e.g. after a model or prompt change).</summary>
+    [HttpPost("{id:guid}/reprocess")]
+    [Authorize(Policy = "IsAdmin")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Reprocess(Guid id, CancellationToken cancellationToken)
+    {
+        return await _documentService.ReprocessAsync(id, cancellationToken) switch
+        {
+            ReprocessResult.Queued => Accepted(),
+            ReprocessResult.NotFound => NotFound(),
+            _ => Conflict(new { message = "Only documents awaiting review can be reprocessed." })
+        };
+    }
+
+    /// <summary>Approved invoice values as CSV, for import into accounting.</summary>
+    [HttpGet("export.csv")]
+    [Produces("text/csv")]
+    public async Task<IActionResult> ExportApproved(
+        [FromServices] IDocumentReviewService reviewService, CancellationToken cancellationToken)
+    {
+        var csv = await reviewService.ExportApprovedCsvAsync(cancellationToken);
+        return File(System.Text.Encoding.UTF8.GetPreamble().Concat(System.Text.Encoding.UTF8.GetBytes(csv)).ToArray(),
+            "text/csv; charset=utf-8", "approved-invoices.csv");
+    }
     /// <summary>
     /// Returns a single document by its ID.
     /// </summary>

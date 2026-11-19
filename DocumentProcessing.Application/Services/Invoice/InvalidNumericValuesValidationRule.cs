@@ -11,7 +11,7 @@ public class InvalidNumericValuesValidationRule : IInvoiceValidationRule
     public string RuleId => "INVALID_NUMERIC_VALUES";
 
     /// <summary>
-    /// Voert de validatie uit op het extractieresultaat.
+    /// Validates the extraction result.
     /// </summary>
     public IEnumerable<ValidationResult> Validate(InvoiceExtractionResult result)
     {
@@ -28,7 +28,7 @@ public class InvalidNumericValuesValidationRule : IInvoiceValidationRule
                     RuleId = RuleId,
                     Status = ValidationStatus.Failing.ToString(),
                     Severity = ValidationSeverity.Error.ToString(),
-                    Message = $"Subtotaal {subtotal} is negatief. Controleer of de waarde correct is geëxtraheerd.",
+                    Message = $"Subtotal {subtotal} is negative. Check that it was extracted correctly.",
                     AffectedFields = "Subtotal",
                     ExtraData = new { SubtotalValue = subtotal, IsNegative = true }
                 });
@@ -46,7 +46,7 @@ public class InvalidNumericValuesValidationRule : IInvoiceValidationRule
                     RuleId = RuleId,
                     Status = ValidationStatus.Failing.ToString(),
                     Severity = ValidationSeverity.Error.ToString(),
-                    Message = $"BTW-bedrag {tax} is negatief. Controleer de waarde.",
+                    Message = $"VAT amount {tax} is negative. Check the value.",
                     AffectedFields = "TaxAmount",
                     ExtraData = new { TaxAmountValue = tax, IsNegative = true }
                 });
@@ -64,7 +64,7 @@ public class InvalidNumericValuesValidationRule : IInvoiceValidationRule
                     RuleId = RuleId,
                     Status = ValidationStatus.Failing.ToString(),
                     Severity = ValidationSeverity.Error.ToString(),
-                    Message = $"Totaalbedrag {total} is negatief.",
+                    Message = $"Total amount {total} is negative.",
                     AffectedFields = "TotalAmount",
                     ExtraData = new { TotalAmountValue = total, IsNegative = true }
                 });

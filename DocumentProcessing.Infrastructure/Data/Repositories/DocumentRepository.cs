@@ -27,15 +27,30 @@ public class DocumentRepository : IDocumentRepository
 
     public async Task<PagedResult<Document>> GetPageAsync(string? ownerId, int skip, int take, CancellationToken cancellationToken = default)
     {
-        var query = ownerId is null ? _dbContext.Documents : _dbContext.Documents.Where(d => d.OwnerId == ownerId);
-        var total = await query.CountAsync(cancellationToken);
-        var items = await query
+        var (items, total) = await QueryAsync(new DocumentQuery(null, null, skip, take), ownerId, cancellationToken);
+        return new PagedResult<Document>(items, total);
+    }
+
+    public async Task<(IReadOnlyList<Document> Items, int TotalCount)> QueryAsync(
+        DocumentQuery query, string? ownerId, CancellationToken cancellationToken = default)
+    {
+        var documents = ownerId is null ? _dbContext.Documents : _dbContext.Documents.Where(d => d.OwnerId == ownerId);
+        if (query.Status is { } status)
+            documents = documents.Where(d => d.Status == status);
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var search = query.Search.Trim().ToLower();
+            documents = documents.Where(d => d.OriginalFileName.ToLower().Contains(search));
+        }
+
+        var total = await documents.CountAsync(cancellationToken);
+        var items = await documents
             .OrderByDescending(d => d.CreatedAtUtc)
             .ThenByDescending(d => d.Id)
-            .Skip(skip)
-            .Take(take)
+            .Skip(query.Skip)
+            .Take(query.Take)
             .ToListAsync(cancellationToken);
-        return new PagedResult<Document>(items, total);
+        return (items, total);
     }
 
     public Task UpdateAsync(Document document, CancellationToken cancellationToken = default)

@@ -44,7 +44,7 @@ public class DocumentTextExtractionService : IDocumentTextExtractionService
 
         if (document == null)
         {
-            throw new TextExtractionNotFoundException($"Document met ID {request.DocumentId} niet gevonden.");
+            throw new TextExtractionNotFoundException($"Document {request.DocumentId} not found.");
         }
 
         var extractionVersion = request.ExtractionVersion ?? await GetNextExtractionVersionAsync(request.DocumentId, cancellationToken);

@@ -11,8 +11,8 @@ using System.Text.Json;
 namespace DocumentProcessing.Application.Services;
 
 /// <summary>
-/// Service voor documentreview: correcties, goedkeuring, afwijzing en auditlog.
-/// De backend is de autoritatieve bron voor validatie en autorisatie.
+/// Document review: corrections, approval, rejection and audit log.
+/// The backend is the authority for validation and authorization.
 /// </summary>
 public class DocumentReviewService : IDocumentReviewService
 {
@@ -117,12 +117,12 @@ public class DocumentReviewService : IDocumentReviewService
         var document = await GetAccessibleDocumentAsync(documentId, cancellationToken);
         if (document == null)
         {
-            return NotFoundResponse(documentId, "Document niet gevonden.");
+            return NotFoundResponse(documentId, "Document not found.");
         }
 
         if (!CanReview())
         {
-            return ForbiddenResponse(documentId, "U heeft geen toestemming om dit document te corrigeren.");
+            return ForbiddenResponse(documentId, "You are not allowed to correct this document.");
         }
 
         if (document.Status != Domain.Entities.DocumentStatus.NeedsReview)
@@ -138,7 +138,7 @@ public class DocumentReviewService : IDocumentReviewService
         var inputErrors = ReviewFields.Validate(request.CorrectedValues);
         if (inputErrors.Count > 0)
         {
-            return InvalidResponse(documentId, "De correcties zijn ongeldig.", inputErrors);
+            return InvalidResponse(documentId, "The corrections are invalid.", inputErrors);
         }
 
         var review = await GetOrCreateReviewAsync(documentId, cancellationToken);
@@ -176,14 +176,14 @@ public class DocumentReviewService : IDocumentReviewService
             return ConflictResponse(documentId);
         }
 
-        _logger.LogInformation("Correcties opgeslagen voor document {DocumentId} door gebruiker {UserId}", documentId, userId);
+        _logger.LogInformation("Corrections saved for document {DocumentId} by user {UserId}", documentId, userId);
 
         return new ReviewActionResponse
         {
             DocumentId = documentId,
             ReviewStatus = review.Status.ToString(),
             Success = true,
-            Message = "Correcties opgeslagen."
+            Message = "Corrections saved."
         };
     }
 
@@ -197,17 +197,17 @@ public class DocumentReviewService : IDocumentReviewService
         var document = await GetAccessibleDocumentAsync(documentId, cancellationToken);
         if (document == null)
         {
-            return NotFoundResponse(documentId, "Document niet gevonden.");
+            return NotFoundResponse(documentId, "Document not found.");
         }
 
         if (!CanApproveOrReject())
         {
-            return ForbiddenResponse(documentId, "U heeft geen toestemming om dit document goed te keuren.");
+            return ForbiddenResponse(documentId, "You are not allowed to approve this document.");
         }
 
         if (request.Comment?.Length > MaxReasonLength)
         {
-            return InvalidResponse(documentId, $"Een opmerking mag maximaal {MaxReasonLength} tekens zijn.");
+            return InvalidResponse(documentId, $"A comment can be at most {MaxReasonLength} characters.");
         }
 
         if (document.Status != Domain.Entities.DocumentStatus.NeedsReview)
@@ -230,7 +230,7 @@ public class DocumentReviewService : IDocumentReviewService
                 DocumentId = documentId,
                 ReviewStatus = review.Status.ToString(),
                 Success = false,
-                Message = "Document kan niet worden goedgekeurd zonder extractieresultaat.",
+                Message = "The document cannot be approved without an extraction result.",
                 Error = ReviewActionError.Conflict
             };
         }
@@ -243,7 +243,7 @@ public class DocumentReviewService : IDocumentReviewService
         if (_validationService.HasErrorsOrCritical())
         {
             var blocking = _validationService.GetErrors().Select(r => r.Message).ToList();
-            var invalid = InvalidResponse(documentId, "Document kan niet worden goedgekeurd zolang er validatiefouten zijn. Corrigeer de velden en probeer het opnieuw.", blocking);
+            var invalid = InvalidResponse(documentId, "The document cannot be approved while validation errors remain. Correct the fields and try again.", blocking);
             invalid.ReviewStatus = review.Status.ToString();
             return invalid;
         }
@@ -269,7 +269,7 @@ public class DocumentReviewService : IDocumentReviewService
             return ConflictResponse(documentId);
         }
 
-        _logger.LogInformation("Document {DocumentId} goedgekeurd door gebruiker {UserId}", documentId, userId);
+        _logger.LogInformation("Document {DocumentId} approved by user {UserId}", documentId, userId);
 
         return new ReviewActionResponse
         {
@@ -279,7 +279,7 @@ public class DocumentReviewService : IDocumentReviewService
             ReviewedBy = review.ReviewedBy,
             ReviewedAtUtc = review.ReviewedAtUtc,
             Success = true,
-            Message = "Document goedgekeurd."
+            Message = "Document approved."
         };
     }
 
@@ -292,22 +292,22 @@ public class DocumentReviewService : IDocumentReviewService
     {
         if (string.IsNullOrWhiteSpace(request.Reason))
         {
-            return InvalidResponse(documentId, "Een afwijsreden is verplicht.");
+            return InvalidResponse(documentId, "A rejection reason is required.");
         }
         if (request.Reason.Length > MaxReasonLength)
         {
-            return InvalidResponse(documentId, $"Een afwijsreden mag maximaal {MaxReasonLength} tekens zijn.");
+            return InvalidResponse(documentId, $"A rejection reason can be at most {MaxReasonLength} characters.");
         }
 
         var document = await GetAccessibleDocumentAsync(documentId, cancellationToken);
         if (document == null)
         {
-            return NotFoundResponse(documentId, "Document niet gevonden.");
+            return NotFoundResponse(documentId, "Document not found.");
         }
 
         if (!CanApproveOrReject())
         {
-            return ForbiddenResponse(documentId, "U heeft geen toestemming om dit document af te wijzen.");
+            return ForbiddenResponse(documentId, "You are not allowed to reject this document.");
         }
 
         if (document.Status != Domain.Entities.DocumentStatus.NeedsReview)
@@ -342,7 +342,7 @@ public class DocumentReviewService : IDocumentReviewService
             return ConflictResponse(documentId);
         }
 
-        _logger.LogInformation("Document {DocumentId} afgewezen door gebruiker {UserId}: {Reason}", documentId, userId, request.Reason);
+        _logger.LogInformation("Document {DocumentId} rejected by user {UserId}: {Reason}", documentId, userId, request.Reason);
 
         return new ReviewActionResponse
         {
@@ -352,7 +352,7 @@ public class DocumentReviewService : IDocumentReviewService
             ReviewedBy = review.ReviewedBy,
             ReviewedAtUtc = review.ReviewedAtUtc,
             Success = true,
-            Message = "Document afgewezen."
+            Message = "Document rejected."
         };
     }
 
@@ -461,7 +461,7 @@ public class DocumentReviewService : IDocumentReviewService
     {
         DocumentId = documentId,
         Success = false,
-        Message = $"Document heeft status {status} en kan nu niet worden beoordeeld.",
+        Message = $"The document has status {status} and cannot be reviewed now.",
         Error = ReviewActionError.Conflict
     };
 
@@ -470,7 +470,7 @@ public class DocumentReviewService : IDocumentReviewService
         DocumentId = documentId,
         ReviewStatus = status.ToString(),
         Success = false,
-        Message = $"Document is al {status} en kan niet meer worden gewijzigd.",
+        Message = $"The document is already {status} and can no longer be changed.",
         Error = ReviewActionError.Conflict
     };
 
@@ -478,7 +478,7 @@ public class DocumentReviewService : IDocumentReviewService
     {
         DocumentId = documentId,
         Success = false,
-        Message = "Het document is tegelijkertijd door een andere gebruiker beoordeeld. Vernieuw de pagina en probeer het opnieuw.",
+        Message = "Another user reviewed this document at the same time. Refresh the page and try again.",
         Error = ReviewActionError.Conflict
     };
 
@@ -596,5 +596,45 @@ public class DocumentReviewService : IDocumentReviewService
             PageCount = entity.PageCount,
             TotalCharacterCount = entity.TotalCharacterCount
         };
+    }
+
+    public async Task<string> ExportApprovedCsvAsync(CancellationToken cancellationToken = default)
+    {
+        string? ownerId = null;
+        if (!_currentUser.HasUnrestrictedDocumentAccess)
+        {
+            if (string.IsNullOrEmpty(_currentUser.UserId))
+                return ToCsvRow(ExportHeader()) + "\r\n";
+            ownerId = _currentUser.UserId;
+        }
+
+        var (documents, _) = await _documentRepository.QueryAsync(
+            new Domain.Interfaces.DocumentQuery(Domain.Entities.DocumentStatus.Completed, null, 0, 10_000), ownerId, cancellationToken);
+        var csv = new System.Text.StringBuilder(ToCsvRow(ExportHeader())).Append("\r\n");
+        foreach (var document in documents)
+        {
+            var review = await _reviewRepository.GetByDocumentIdAsync(document.Id, cancellationToken);
+            if (review?.Status != Domain.Enums.ReviewStatus.Approved)
+                continue;
+            var values = ReviewFields.Parse(review.ApprovedValuesJson);
+            var row = new List<string?> { document.Id.ToString(), document.OriginalFileName, review.ReviewedAtUtc?.ToString("O"), review.ReviewedBy };
+            row.AddRange(ReviewFields.Names.Select(name => values.GetValueOrDefault(name)));
+            csv.Append(ToCsvRow(row)).Append("\r\n");
+        }
+        return csv.ToString();
+    }
+
+    private static List<string?> ExportHeader() =>
+        new List<string?> { "DocumentId", "FileName", "ReviewedAtUtc", "ReviewedBy" }.Concat(ReviewFields.Names).ToList();
+
+    private static string ToCsvRow(IEnumerable<string?> values) => string.Join(",", values.Select(EscapeCsv));
+
+    internal static string EscapeCsv(string? value)
+    {
+        value ??= string.Empty;
+        // Stop spreadsheet apps from running a cell as a formula (CSV injection).
+        if (value.Length > 0 && "=+-@\t\r".Contains(value[0]))
+            value = "'" + value;
+        return value.IndexOfAny([',', '"', '\n', '\r']) >= 0 ? $"\"{value.Replace("\"", "\"\"")}\"" : value;
     }
 }

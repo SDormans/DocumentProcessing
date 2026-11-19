@@ -20,7 +20,9 @@ Two-factor sign-in: `POST /api/auth/mfa/setup` (signed in) returns `sharedKey` a
 | Method | Path | Access | Notes |
 |---|---|---|---|
 | POST | `/api/documents` | Signed in; 20/min per user | `multipart/form-data`, field `file`. `201`, `400` validation, `413` too large, `415` not a PDF |
-| GET | `/api/documents?skip=0&take=50` | Signed in | Own documents, newest first; all for unrestricted roles. `take` 1–200; total in `X-Total-Count` |
+| GET | `/api/documents?skip=0&take=50&status=&search=` | Signed in | Own documents, newest first; all for unrestricted roles. `take` 1–200, optional `status` and `search` (file name); total in `X-Total-Count`; `400` for bad values |
+| POST | `/api/documents/{id}/reprocess` | `IsAdmin` | Re-extract a `NeedsReview` document as a new result version. `202`, `404`, `409` |
+| GET | `/api/documents/export.csv` | Signed in | Approved values of completed documents you may see, one row per document |
 | GET | `/api/documents/{id}` | Signed in, owner | `404` if missing **or not yours** |
 | POST | `/api/documents/{id}/requeue` | `IsAdmin` | Re-queues a `Failed` document. `202`, `404` missing, `409` not failed (including `Rejected`) or already re-queued by a concurrent request |
 | GET | `/api/documents/{id}/content` | Signed in, owner | The PDF; `404` for `Quarantined` documents |

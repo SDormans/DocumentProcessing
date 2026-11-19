@@ -12,7 +12,7 @@ using System.Security.Claims;
 namespace DocumentProcessing.Api.Controllers;
 
 /// <summary>
-/// Authenticatie-eindpunten voor de review-interface.
+/// Authentication endpoints for the review UI.
 /// Users are stored with ASP.NET Core Identity in PostgreSQL; an initial administrator can be bootstrapped through configuration.
 /// </summary>
 [ApiController]
@@ -32,7 +32,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Logt een gebruiker in en stelt een authenticatiecookie in.
+    /// Signs a user in and sets the authentication cookie.
     /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
@@ -45,14 +45,14 @@ public class AuthController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
         {
-            return BadRequest(new { message = "Gebruikersnaam en wachtwoord zijn verplicht." });
+            return BadRequest(new { message = "Username and password are required." });
         }
 
         var user = await _userService.ValidateUserAsync(request.Username, request.Password, cancellationToken);
         if (user == null)
         {
             _logger.LogWarning("Login attempt failed.");
-            return Unauthorized(new { message = "Ongeldige gebruikersnaam of wachtwoord." });
+            return Unauthorized(new { message = "Invalid username or password." });
         }
 
         var usedMfa = false;
@@ -124,7 +124,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Logt de huidige gebruiker uit.
+    /// Signs the current user out.
     /// </summary>
     [HttpPost("logout")]
     [AllowAnonymous]
@@ -132,11 +132,11 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Logout()
     {
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        return Ok(new { message = "Uitgelogd." });
+        return Ok(new { message = "Signed out." });
     }
 
     /// <summary>
-    /// Geeft informatie over de momenteel ingelogde gebruiker.
+    /// Returns the signed-in user.
     /// </summary>
     [HttpGet("me")]
     [Authorize]
@@ -163,7 +163,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Maakt een nieuwe gebruiker aan (alleen voor development/beheer).
+    /// Creates a user (admin only).
     /// </summary>
     [HttpPost("register")]
     [Authorize(Policy = "IsAdmin")]

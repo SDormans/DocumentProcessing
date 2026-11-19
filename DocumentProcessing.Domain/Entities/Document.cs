@@ -147,6 +147,7 @@ public class Document
         (DocumentStatus.NeedsReview, DocumentStatus.Completed) => true,
         (DocumentStatus.NeedsReview, DocumentStatus.Failed) => true,
         (DocumentStatus.NeedsReview, DocumentStatus.Rejected) => true,
+        (DocumentStatus.NeedsReview, DocumentStatus.Queued) => true,
 
         // Failed documents can be retried; Rejected is final.
         (DocumentStatus.Failed, DocumentStatus.Queued) => true,

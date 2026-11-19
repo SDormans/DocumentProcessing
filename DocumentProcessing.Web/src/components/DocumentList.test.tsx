@@ -29,11 +29,11 @@ describe('DocumentList', () => {
 
     render(<MemoryRouter><DocumentList /></MemoryRouter>);
 
-    const more = await screen.findByRole('button', { name: `Show more (${PAGE_SIZE} of ${PAGE_SIZE + 1})` });
-    await userEvent.click(more);
+    expect(await screen.findByText(`Page 1 of 2 (${PAGE_SIZE + 1} documents)`)).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }));
 
     expect(await screen.findByText(`invoice-${PAGE_SIZE}.pdf`)).toBeTruthy();
     expect(fetchMock).toHaveBeenLastCalledWith(`/api/documents?skip=${PAGE_SIZE}&take=${PAGE_SIZE}`, expect.anything());
-    expect(screen.queryByRole('button', { name: /Show more/ })).toBeNull();
+    expect((screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

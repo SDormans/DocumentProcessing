@@ -23,6 +23,12 @@ public interface IDocumentService
     /// <summary>Re-queues a failed document the current user can access, to be processed with <paramref name="modelType"/>.</summary>
     Task<ModelSwitchResult> RetryWithModelAsync(Guid id, string? modelType, CancellationToken cancellationToken = default);
 
+    /// <summary>Re-runs extraction for a document awaiting review; the new result becomes the next version.</summary>
+    Task<ReprocessResult> ReprocessAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>One page of the documents the current user may see, newest first, filtered by status and file name.</summary>
+    Task<DocumentPage> GetDocumentPageAsync(DocumentQuery query, CancellationToken cancellationToken = default);
+
     Task<DocumentFileDto?> GetDocumentFileAsync(Guid id, CancellationToken cancellationToken = default);
 }
 
@@ -40,4 +46,13 @@ public enum ModelSwitchResult
     NotFailed,
     InvalidModel,
     ModelUnavailable
+}
+
+public sealed record DocumentPage(IReadOnlyList<DocumentDto> Items, int TotalCount);
+
+public enum ReprocessResult
+{
+    Queued,
+    NotFound,
+    NotReprocessable
 }

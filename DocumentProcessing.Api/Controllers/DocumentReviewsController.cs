@@ -7,7 +7,7 @@ using System.Security.Claims;
 namespace DocumentProcessing.Api.Controllers;
 
 /// <summary>
-/// API voor documentreview: ophalen van detail, indienen van correcties,
+/// Document review API: detail, corrections,
 /// goedkeuren, afwijzen en auditlog.
 /// Alle eindpunten vereisen authenticatie; schrijf-acties vereisen de juiste rol/beleid.
 /// </summary>
@@ -32,7 +32,7 @@ public class DocumentReviewsController : ControllerBase
     private string CurrentUserName => User.FindFirst(ClaimTypes.Name)?.Value ?? string.Empty;
 
     /// <summary>
-    /// Haalt de detailweergave van een document op voor review.
+    /// Returns the review detail of a document.
     /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(DocumentDetailDto), StatusCodes.Status200OK)]
@@ -42,13 +42,13 @@ public class DocumentReviewsController : ControllerBase
         var detail = await _reviewService.GetDocumentDetailAsync(documentId, cancellationToken);
         if (detail == null)
         {
-            return NotFound(new { message = "Document niet gevonden." });
+            return NotFound(new { message = "Document not found." });
         }
         return Ok(detail);
     }
 
     /// <summary>
-    /// Dien gecorrigeerde waarden in. Originele AI-output wordt bewaard.
+    /// Submits corrected values. The original AI output is kept.
     /// </summary>
     [HttpPut("corrections")]
     [Authorize(Policy = "CanReviewDocuments")]
@@ -69,7 +69,7 @@ public class DocumentReviewsController : ControllerBase
     }
 
     /// <summary>
-    /// Keurt een document goed. Alleen toegestaan als er geen kritieke validatiefouten zijn.
+    /// Approves a document. Only allowed when no validation errors remain.
     /// Vereist de CanApproveReject-beleid.
     /// </summary>
     [HttpPost("approve")]
@@ -91,7 +91,7 @@ public class DocumentReviewsController : ControllerBase
     }
 
     /// <summary>
-    /// Wijst een document af. Een reden is verplicht.
+    /// Rejects a document. A reason is required.
     /// Vereist de CanApproveReject-beleid.
     /// </summary>
     [HttpPost("reject")]
@@ -113,7 +113,7 @@ public class DocumentReviewsController : ControllerBase
     }
 
     /// <summary>
-    /// Haalt de auditlog op voor een documentreview.
+    /// Returns the audit log of a document review.
     /// </summary>
     [HttpGet("audit-log")]
     [ProducesResponseType(typeof(IEnumerable<ReviewAuditEntryDto>), StatusCodes.Status200OK)]
@@ -123,7 +123,7 @@ public class DocumentReviewsController : ControllerBase
         var log = await _reviewService.GetAuditLogAsync(documentId, cancellationToken);
         if (log == null)
         {
-            return NotFound(new { message = "Document niet gevonden." });
+            return NotFound(new { message = "Document not found." });
         }
         return Ok(log);
     }

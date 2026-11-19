@@ -52,7 +52,7 @@ public class PdfPigTextExtractor : IDocumentTextExtractor
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to extract text from page {PageNumber}", pageNumber);
-                warnings.Add($"Pagina {pageNumber}: tekstextractie mislukt ({ex.Message})");
+                warnings.Add($"Page {pageNumber}: text extraction failed ({ex.Message})");
                 pages.Add(new ExtractedPage
                 {
                     PageNumber = pageNumber,

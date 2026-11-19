@@ -63,6 +63,12 @@ public class UploadExtractReviewTests(PostgresFixture postgres) : IAsyncLifetime
 
         var audit = await alice.Http.GetFromJsonAsync<JsonElement>($"/api/documents/{id}/review/audit-log");
         audit.GetArrayLength().Should().BeGreaterThan(0);
+
+        var csv = await alice.Http.GetStringAsync("/api/documents/export.csv");
+        csv.Should().StartWith("DocumentId,FileName,ReviewedAtUtc,ReviewedBy,");
+        csv.Should().Contain(id.ToString()).And.Contain("INV-2026-001-A");
+        using var bob = await SignInAsync("bob");
+        (await bob.Http.GetStringAsync("/api/documents/export.csv")).Should().NotContain(id.ToString());
     }
 
     [Fact]
@@ -89,7 +95,7 @@ public class UploadExtractReviewTests(PostgresFixture postgres) : IAsyncLifetime
         (await bob.Http.GetAsync($"/api/documents/{id}/review")).StatusCode.Should().Be(HttpStatusCode.NotFound);
         var approve = await bob.SendAsync(HttpMethod.Post, $"/api/documents/{id}/review/approve", JsonContent.Create(new { comment = "x" }));
         approve.StatusCode.Should().Be(HttpStatusCode.NotFound);
-        (await approve.Content.ReadAsStringAsync()).Should().Contain("Document niet gevonden");
+        (await approve.Content.ReadAsStringAsync()).Should().Contain("Document not found");
         (await bob.SendAsync(HttpMethod.Post, $"/api/documents/{id}/review/reject", JsonContent.Create(new { reason = "x" })))
             .StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await bob.SendAsync(HttpMethod.Put, $"/api/documents/{id}/review/corrections", CorrectionsContent(("SupplierName", "x"))))

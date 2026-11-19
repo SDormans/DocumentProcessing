@@ -200,3 +200,11 @@ textarea {
   gap: 0.5rem;
   flex-wrap: wrap;
 }
+
+.list-filters,
+.pager {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.75rem 0;
+}

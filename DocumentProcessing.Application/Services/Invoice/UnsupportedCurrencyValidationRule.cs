@@ -24,7 +24,7 @@ public class UnsupportedCurrencyValidationRule : IInvoiceValidationRule
     public string RuleId => "UNSUPPORTED_CURRENCY";
 
     /// <summary>
-    /// Voert de validatie uit op het extractieresultaat.
+    /// Validates the extraction result.
     /// </summary>
     public IEnumerable<ValidationResult> Validate(InvoiceExtractionResult result)
     {
@@ -41,7 +41,7 @@ public class UnsupportedCurrencyValidationRule : IInvoiceValidationRule
                     RuleId = RuleId,
                     Status = ValidationStatus.Warning.ToString(),
                     Severity = ValidationSeverity.Warning.ToString(),
-                    Message = $"Valuta '{currency}' is niet standaard. Controleer of dit correct is voor de transactie.",
+                    Message = $"Currency '{currency}' is not a standard currency. Check that it is correct.",
                     AffectedFields = "Currency",
                     ExtraData = new { CurrencyValue = currency, IsSupported = false }
                 });

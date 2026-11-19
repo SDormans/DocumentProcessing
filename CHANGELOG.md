@@ -44,6 +44,15 @@ All notable changes to this project are documented here.
 - The unused `Tesseract` (native wrapper), `PDFsharp-MigraDoc` and `SkiaSharp` packages and the placeholder `OcrPdfTextExtractor`/`PdfPageRenderer`.
 
 ### Added
+- Document list paging, status filter and file-name search: `GET /api/documents?page=&pageSize=&status=&search=` (page size 1-200, default 50) with the total in `X-Total-Count`. The web list has a search box, status filter and pager.
+- Reprocessing: admins can re-run extraction for a document awaiting review with `POST /api/documents/{id}/reprocess` (202/404/409); the result is stored as the next version.
+- CSV export: `GET /api/documents/export.csv` returns the approved values of every completed document the user may see (UTF-8 with BOM, formula-like cells prefixed with `'`).
+- Batch upload: the web upload accepts several PDFs and uploads them one by one, listing any that failed.
+
+### Changed
+- All API messages, validation messages, extraction warnings and code comments are now English (the UI already was).
+
+### Added
 - ASP.NET Core Identity user store backed by PostgreSQL, replacing the in-memory `DevelopmentUserService`; the API can now start outside Development.
 - README: project origin note and project history section (hackathon version vs portfolio version).
 - This changelog.

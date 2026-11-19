@@ -196,6 +196,35 @@ public class DocumentService : IDocumentService
         return new PagedResult<DocumentDto>(page.Items.Select(MapToDto).ToList(), page.TotalCount);
     }
 
+    public async Task<ReprocessResult> ReprocessAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var document = await GetAccessibleDocumentAsync(id, cancellationToken);
+        if (document is null)
+            return ReprocessResult.NotFound;
+        if (document.Status != DocumentStatus.NeedsReview)
+            return ReprocessResult.NotReprocessable;
+
+        document.UpdateStatus(DocumentStatus.Queued);
+        await _processingQueue.EnqueueAsync(document.Id, cancellationToken);
+        await _documentRepository.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Document {DocumentId} queued for reprocessing by {UserId}.", id, _currentUser.UserId);
+        return ReprocessResult.Queued;
+    }
+
+    public async Task<DocumentPage> GetDocumentPageAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+    {
+        string? ownerId = null;
+        if (!_currentUser.HasUnrestrictedDocumentAccess)
+        {
+            if (string.IsNullOrEmpty(_currentUser.UserId))
+                return new DocumentPage([], 0);
+            ownerId = _currentUser.UserId;
+        }
+
+        var (items, total) = await _documentRepository.QueryAsync(query, ownerId, cancellationToken);
+        return new DocumentPage(items.Select(MapToDto).ToList(), total);
+    }
+
     public async Task<DocumentFileDto?> GetDocumentFileAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var document = await GetAccessibleDocumentAsync(id, cancellationToken);
