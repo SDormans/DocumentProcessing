@@ -8,6 +8,8 @@
     "aiCloudEndpoint": { "value": "https://api.openai.com/v1/" },
     "aiCloudModel": { "value": "gpt-4o-mini" },
     "aiLocalProvider": { "value": "None" },
+    "deployOllama": { "value": false },
+    "ollamaModel": { "value": "qwen2.5:3b" },
     "aiDefaultModelType": { "value": "Cloud" },
     "aiFallbackMode": { "value": "None" },
     "malwareScanner": { "value": "None" },

@@ -53,7 +53,8 @@ Copy `infra/main.parameters.json` (outside the repo, or keep the copy out of git
 | `bootstrapAdminEmail` | (required) | Email of the first admin. |
 | `alertEmail` | (placeholder) | Where alerts go. Use `""` for no alerts. |
 | `aiCloudProvider` / `aiCloudEndpoint` / `aiCloudModel` | `OpenAI`, `https://api.openai.com/v1/`, `gpt-4o-mini` | `OpenAI` also covers Azure OpenAI (endpoint `https://<resource>.openai.azure.com/openai/v1/`, `aiCloudApiKeyHeader=api-key`). `Anthropic` uses `https://api.anthropic.com/v1/`. `Fake` returns empty fields (demo only). |
-| `aiLocalProvider` / `aiLocalEndpoint` / `aiLocalModel` | `None` | Off by default: Container Apps has no GPU in this template. To offer a "Local" model, point it at an OpenAI-compatible server (Ollama, `llama-server`) that the virtual network can reach, e.g. a VM peered into it. |
+| `deployOllama` / `ollamaModel` / `ollamaContextLength` | `false`, `qwen2.5:3b`, `16384` | `true` runs Ollama on CPU (4 vCPU, 8 GiB) as an internal-only container app and makes it the "Local" model; nothing leaves Azure. It pulls the model on first start (a few minutes; the model dropdown says "not installed" until then) and keeps it on an Azure Files share in a separate storage account that holds only model weights. Expect minutes per invoice and lower accuracy than a hosted model; local timeouts are raised to 10/20 minutes. |
+| `aiLocalProvider` / `aiLocalEndpoint` / `aiLocalModel` | `None` | Ignored when `deployOllama` is `true`. Otherwise off by default; to offer a "Local" model elsewhere, point it at an OpenAI-compatible server (Ollama, `llama-server`) that the virtual network can reach, e.g. a VM peered into it. |
 | `aiDefaultModelType` | `Cloud` | Must name an enabled model. |
 | `aiFallbackMode` | `None` | `Automatic` may send invoices a user chose to keep local to the cloud model. |
 | `malwareScanner` | `None` | `ClamAv` adds the sidecar once the security milestone is merged. |

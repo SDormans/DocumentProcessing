@@ -49,6 +49,13 @@ param aiLocalProvider string = 'None'
 param aiLocalEndpoint string = ''
 param aiLocalModel string = ''
 
+@description('Run a CPU-only Ollama container in the environment and use it as the Local model. Overrides aiLocalProvider/aiLocalEndpoint/aiLocalModel.')
+param deployOllama bool = false
+@description('Ollama model pulled at startup. Small models suit CPU-only inference.')
+param ollamaModel string = 'qwen2.5:3b'
+@description('Context window for Ollama (tokens). Invoice prompts are up to about 12k tokens.')
+param ollamaContextLength int = 16384
+
 @allowed(['Cloud', 'Local'])
 param aiDefaultModelType string = 'Cloud'
 @allowed(['None', 'Automatic'])
@@ -249,6 +256,90 @@ resource env 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
+// Model weights live on Azure Files so a restart doesn't download them again. Container Apps mounts Azure Files with
+// the account key, so this separate account (model weights only, no invoice data) keeps shared-key access on.
+resource modelStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = if (deployOllama) {
+  name: take('dpm${suffix}', 24)
+  location: location
+  sku: { name: 'Standard_LRS' }
+  kind: 'StorageV2'
+  properties: {
+    allowBlobPublicAccess: false
+    minimumTlsVersion: 'TLS1_2'
+    supportsHttpsTrafficOnly: true
+  }
+}
+
+resource modelFiles 'Microsoft.Storage/storageAccounts/fileServices@2023-05-01' = if (deployOllama) {
+  parent: modelStorage
+  name: 'default'
+}
+
+resource modelShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-05-01' = if (deployOllama) {
+  parent: modelFiles
+  name: 'ollama-models'
+  properties: { shareQuota: 50 }
+}
+
+resource envModelStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = if (deployOllama) {
+  parent: env
+  name: 'ollama-models'
+  properties: {
+    azureFile: {
+      accountName: modelStorage.name
+      accountKey: modelStorage!.listKeys().keys[0].value
+      shareName: modelShare.name
+      accessMode: 'ReadWrite'
+    }
+  }
+}
+
+var ollamaName = '${namePrefix}-ollama'
+
+// Internal only: reachable as http://<name> from the other apps in the environment, never from the internet.
+resource ollama 'Microsoft.App/containerApps@2024-03-01' = if (deployOllama) {
+  name: ollamaName
+  location: location
+  properties: {
+    environmentId: env.id
+    workloadProfileName: 'Consumption'
+    configuration: {
+      ingress: { external: false, targetPort: 11434, transport: 'http', allowInsecure: true }
+    }
+    template: {
+      containers: [
+        {
+          name: 'ollama'
+          image: 'docker.io/ollama/ollama:0.12.6'
+          // Consumption maximum. Pulls the model in the background on first start; the app's model check
+          // reports "not installed" until it is there.
+          resources: { cpu: json('4.0'), memory: '8Gi' }
+          command: ['/bin/sh', '-c', 'ollama serve & until ollama list >/dev/null 2>&1; do sleep 2; done; ollama pull "$OLLAMA_PULL_MODEL"; wait']
+          env: [
+            { name: 'OLLAMA_HOST', value: '0.0.0.0:11434' }
+            { name: 'OLLAMA_MODELS', value: '/models' }
+            { name: 'OLLAMA_PULL_MODEL', value: ollamaModel }
+            { name: 'OLLAMA_CONTEXT_LENGTH', value: string(ollamaContextLength) }
+            { name: 'OLLAMA_KEEP_ALIVE', value: '-1' }
+            { name: 'OLLAMA_NUM_PARALLEL', value: '1' }
+          ]
+          volumeMounts: [{ volumeName: 'models', mountPath: '/models' }]
+          probes: [
+            { type: 'Liveness', tcpSocket: { port: 11434 } }
+            { type: 'Startup', tcpSocket: { port: 11434 }, periodSeconds: 10, failureThreshold: 30 }
+          ]
+        }
+      ]
+      volumes: [{ name: 'models', storageType: 'AzureFile', storageName: envModelStorage.name }]
+      scale: { minReplicas: 1, maxReplicas: 1 }
+    }
+  }
+}
+
+var localProvider = deployOllama ? 'OpenAI' : aiLocalProvider
+var localEndpoint = deployOllama ? 'http://${ollamaName}/v1/' : aiLocalEndpoint
+var localModel = deployOllama ? ollamaModel : aiLocalModel
+
 var connectionString = 'Host=${postgres.properties.fullyQualifiedDomainName};Database=${dbName};Username=${appDbUser};Password=${appDbPassword};SSL Mode=Require'
 
 // Shared by the API (which offers, validates and probes the models) and the worker (which calls them).
@@ -258,9 +349,12 @@ var aiEnv = [
   { name: 'Ai__Cloud__ModelName', value: aiCloudModel }
   { name: 'Ai__Cloud__ApiKeyHeader', value: aiCloudApiKeyHeader }
   { name: 'Ai__Cloud__ApiKey', secretRef: 'ai-cloud-key' }
-  { name: 'Ai__Local__Provider', value: aiLocalProvider }
-  { name: 'Ai__Local__Endpoint', value: aiLocalEndpoint }
-  { name: 'Ai__Local__ModelName', value: aiLocalModel }
+  { name: 'Ai__Local__Provider', value: localProvider }
+  { name: 'Ai__Local__Endpoint', value: localEndpoint }
+  { name: 'Ai__Local__ModelName', value: localModel }
+  // CPU inference of a whole invoice takes minutes; the worker renews its queue lease meanwhile.
+  { name: 'Ai__Local__AttemptTimeoutSeconds', value: deployOllama ? '600' : '60' }
+  { name: 'Ai__Local__TotalTimeoutSeconds', value: deployOllama ? '1200' : '180' }
   { name: 'Ai__DefaultModelType', value: aiDefaultModelType }
   { name: 'Ai__Fallback__Mode', value: aiFallbackMode }
 ]
@@ -570,3 +664,4 @@ output postgresHost string = postgres.properties.fullyQualifiedDomainName
 output storageAccount string = storage.name
 output appInsightsName string = appInsights.name
 output dashboardId string = dashboard.id
+output ollamaApp string = deployOllama ? ollamaName : ''

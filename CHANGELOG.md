@@ -5,6 +5,7 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 ### Added
+- Azure: `deployOllama=true` runs a CPU-only Ollama container app (internal ingress, model weights on Azure Files) and wires it up as the Local model (`ollamaModel`, default `qwen2.5:3b`; local timeouts 600/1200 s).
 - Reviewer work queue: `GET /api/documents/review-queue` lists unassigned `NeedsReview` documents from every owner (oldest first); `POST /api/documents/{id}/claim` assigns one to the calling reviewer in a single conditional update (`409` if someone else won); admins reassign or return a document to the queue with `PUT /api/documents/{id}/assignee`. Assignees can see and review the document. Web: "Review queue" page with a Claim button. Migration `AddReviewerAssignment`.
 - Operations monitoring: `APPLICATIONINSIGHTS_CONNECTION_STRING` sends traces, metrics and logs to Application Insights (alongside or instead of OTLP). New `documentprocessing.queue.depth` gauge. Bicep adds a workspace-based Application Insights resource, an operations workbook (queue depth, outcomes, AI cost, tokens, latency, errors) and a queue-backlog alert (`queueDepthAlertThreshold`, default 100).
 
