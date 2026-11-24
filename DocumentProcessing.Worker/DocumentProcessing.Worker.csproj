@@ -10,7 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="11.0.0" />
-    <PackageReference Include="Npgsql" Version="10.0.3" />
+    <PackageReference Include="Npgsql" Version="10.0.4" />
     <ProjectReference Include="../DocumentProcessing.Application/DocumentProcessing.Application.csproj" />
     <ProjectReference Include="../DocumentProcessing.Domain/DocumentProcessing.Domain.csproj" />
     <ProjectReference Include="../DocumentProcessing.Infrastructure/DocumentProcessing.Infrastructure.csproj" />
